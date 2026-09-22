@@ -65,12 +65,29 @@ if nutzer["rolle"] in zaehler.ADMIN_ROLLEN:
             st.caption("Gezählt werden nur Zahlen: wer, wann, Modell, Tokens, Kosten, Anzahl Fragen, "
                        "Seiten und Bilder. Keine Fragetexte, keine PDFs.")
 
-# Modellvergleich 22.09.2026: Pruefung_Werkstoffe_mit_Loesungen.pdf, je 3 Läufe (README «App»)
-MODELLE = {
-    "gpt-5.6-luna": "gpt-5.6-luna — günstiger (Standard)",
-    "gpt-4.1": "gpt-4.1 — teurer, sehr gleichmässig",
-}
+MODELL = "gpt-5.6-luna"          # im Vergleich vom 22.09.2026 zuverlässig und am günstigsten
 PROMPT = (Path(__file__).parent / "prompt_extern.md").read_text(encoding="utf-8")
+BEISPIEL_PDF = Path(__file__).parent.parent / "beispiele" / "Ideale_Gase_Videotest_mit_Loesungen.pdf"
+
+
+with st.container(border=True):
+    st.markdown(
+        "**Was diese Seite macht:** Aus Ihrem PDF mit Fragen **und Lösungen** entsteht ein **Zip-Paket**, "
+        "das Sie in OLAT im **Autorenbereich → Importieren** hochladen und als **Test** anlegen. "
+        "Fragetypen, Punkte, Lösungen, Musterlösungen und Formeln kommen mit.\n\n"
+        "- 🖼 **Bilder aus dem PDF** (Diagramme, Schemas, Fotos) landen bei der Frage, bei der sie stehen. "
+        "Logos auf jeder Seite und kleine Symbole werden weggelassen.\n"
+        "- 🎬 **Video- und Audio-Links im PDF** (YouTube, nanoo.tv, mp3) werden erkannt — auch solche, die "
+        "hinter einem Wort verlinkt sind — und erscheinen in OLAT als Player.\n"
+        "- ✅ Vor dem Herunterladen sehen Sie jede Frage mit ihrer Lösung und können den Fragensatz ändern.")
+    if BEISPIEL_PDF.is_file():
+        b1, b2 = st.columns([1, 3])
+        b1.download_button("Beispiel-PDF herunterladen", BEISPIEL_PDF.read_bytes(),
+                           BEISPIEL_PDF.name, "application/pdf")
+        b2.caption("«Ideale Gase» — 15 Fragen mit Video, drei Bildern, Formeln und offenen Aufgaben. "
+                   "Laden Sie es unten hoch, um den ganzen Weg bis zum OLAT-Import auszuprobieren. "
+                   "[Im Repo ansehen](https://github.com/aburossi/olat-qti-app/blob/main/beispiele/"
+                   "Ideale_Gase_Videotest_mit_Loesungen.pdf)")
 
 
 def neuer_satz(text: str, name: str, verbrauch=None, fehlende_seiten=None,
@@ -85,22 +102,9 @@ def neuer_satz(text: str, name: str, verbrauch=None, fehlende_seiten=None,
 
 
 def aus_pdf() -> None:
+    modell = MODELL
     st.info("Nur Tests mit Fragen und Lösungen hochladen — **keine Antworten von Lernenden, keine Namen, "
             "keine Noten**. Der Text des PDFs wird zur Umwandlung an OpenAI geschickt.")
-    # Standard ist bewusst das günstigere Modell (erstes in MODELLE), unabhängig von secrets.toml
-    modell = st.radio("Modell", list(MODELLE), format_func=MODELLE.get, horizontal=True, index=0)
-    with st.container(border=True):
-        st.markdown(
-            "**Welches Modell?** Im Test (Werkstoff-Prüfung, 20 Fragen, je 3 Durchläufe) waren beide gleich "
-            "zuverlässig: alle Lösungen, Punkte und Teile korrekt übertragen.\n"
-            "- **gpt-5.6-luna** — *günstiger*. Übernimmt den Punkteschlüssel der offenen Fragen meist in die "
-            "Musterlösung (praktisch für die Korrektur). Aufgaben mit Unterpunkten (a–d) werden mal als eine, "
-            "mal als mehrere Fragen übertragen — beides funktioniert, aber das Ergebnis schwankt von Lauf zu Lauf.\n"
-            "- **gpt-4.1** — *teurer*. Liefert bei jedem Lauf dieselbe Struktur. Lässt den Punkteschlüssel der "
-            "offenen Fragen meist weg.\n\n"
-            "Bei beiden noch nicht an echten Scans geprüft — Fragen von Bildseiten mit ⚠ besonders kontrollieren. "
-            "gpt-4.1-mini ist bewusst nicht wählbar: Im Test falsche Punkte und verstümmelte Umlaute.")
-
     st.caption("🎬 **Video oder Audio einbetten:** Bei der Frage im PDF einen Link auf YouTube, nanoo.tv oder "
                "eine mp3-Datei hinschreiben — ausgeschrieben oder hinter einem Wort verlinkt. In OLAT erscheint "
                "er als Player unter dem Fragetext. Der Link muss für Lernende ohne Anmeldung erreichbar sein.")
@@ -245,11 +249,9 @@ if v:
             k4.metric("Ihre Umwandlungen", f"{m['anzahl']} · ${m['kosten']:.2f}",
                       help=f"Alle Ihre Umwandlungen in dieser App{seit} — in Supabase gezählt, "
                            "nur Zahlen, keine Inhalte.")
-        andere = [(m2, umwandeln.kosten(v, m2)) for m2 in umwandeln.PREISE if m2 != modell]
-        preise = " · ".join(f"{m2}: ${e:.2f} ein / ${a:.2f} aus" for m2, (e, a) in umwandeln.PREISE.items())
-        vergleich = " · ".join(f"mit {m2} wären es ${k:.4f}" for m2, k in andere if k is not None)
-        st.caption(f"Modell: **{modell}**. {vergleich} (bei gleich vielen Tokens — ein anderes Modell "
-                   f"braucht meist etwas mehr oder weniger). Preise pro Million Tokens: {preise}.")
+        if (preis := umwandeln.PREISE.get(modell)):
+            st.caption(f"Modell: **{modell}** — ${preis[0]:.2f} pro Million Eingabe-Tokens, "
+                       f"${preis[1]:.2f} pro Million Ausgabe-Tokens.")
         if fehler := st.session_state.get("zaehler_fehler"):
             st.caption(f"⚠ {fehler} — das Zip ist davon nicht betroffen.")
 if fehlend := st.session_state.get("fehlende_seiten"):

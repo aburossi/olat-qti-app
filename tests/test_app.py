@@ -35,14 +35,14 @@ def main() -> int:
     tabs = [t.label for t in at.tabs]
     if tabs != ["Aus PDF (OpenAI)", "YAML einfügen (eigene KI)"]:
         fehler.append(f"Tabs: {tabs}")
-    radio = at.radio[0] if at.radio else None
-    if not radio or list(radio.options) != ["gpt-5.6-luna — günstiger (Standard)", "gpt-4.1 — teurer, sehr gleichmässig"] \
-            or radio.value != "gpt-5.6-luna":
-        fehler.append(f"Modellwahl: {radio and (list(radio.options), radio.value)}")
-    seite = " ".join(m.value for m in at.markdown)
-    for stichwort in ("günstiger", "teurer", "Punkteschlüssel", "gpt-4.1-mini"):
+    if at.radio:
+        fehler.append("Modellwahl sollte es nicht mehr geben (nur noch gpt-5.6-luna)")
+    seite = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
+    for stichwort in ("Autorenbereich", "Importieren", "Zip-Paket", "Bilder aus dem PDF", "nanoo.tv"):
         if stichwort not in seite:
-            fehler.append(f"Modellhinweis ohne «{stichwort}»")
+            fehler.append(f"Erklärung ohne «{stichwort}»")
+    if not any("Beispiel-PDF" in b.label for b in [*at.button, *at.download_button]):
+        fehler.append("Beispiel-PDF wird nicht angeboten")
 
     # YAML-Weg: KI-Antwort mit Begleittext und Codeblock einfügen
     prompt = (APP / "prompt_extern.md").read_text(encoding="utf-8")
@@ -94,8 +94,8 @@ def main() -> int:
     werte = {m.label: m.value for m in at3.metric}
     if werte.get("Kosten dieser Umwandlung") != "$0.0044" or werte.get("100 solche Umwandlungen") != "$0.44":
         fehler.append(f"Preisrechner: {werte}")
-    if not any("mit gpt-4.1 wären es $0.0319" in c.value for c in at3.caption):
-        fehler.append("Vergleich mit gpt-4.1 fehlt oder falsch")
+    if not any("$0.20 pro Million Eingabe-Tokens" in c.value for c in at3.caption):
+        fehler.append("Preisangabe zum Modell fehlt")
     if at2.metric:
         fehler.append("Preisrechner erscheint auch ohne OpenAI-Umwandlung (YAML-Weg)")
 

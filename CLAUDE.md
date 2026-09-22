@@ -28,10 +28,10 @@ YAML-Format, die Skill mitziehen.
 ## App (`app/`)
 
 Streamlit, zwei Wege zum selben YAML → `olatqti.py` → Zip:
-- **Aus PDF:** OpenAI (Structured Outputs, `app/umwandeln.py`). Wählbar `gpt-5.6-luna`
-  (Standard, günstiger) und `gpt-4.1`; Vergleich vom 22.09.2026 an einer Werkstoff-Prüfung,
-  je 3 Läufe: beide fehlerfrei; `gpt-4.1-mini` bewusst nicht wählbar (falsche Punkte,
-  verstümmelte Zeichen). Der Hinweistext dazu steht in `aus_pdf()` — bei neuem Vergleich anpassen.
+- **Aus PDF:** OpenAI (Structured Outputs, `app/umwandeln.py`), fest `gpt-5.6-luna` (`MODELL` in
+  `streamlit_app.py`). Vergleich vom 22.09.2026 (Werkstoff-Prüfung, je 3 Läufe): luna und gpt-4.1
+  gleich zuverlässig, luna rund 7× günstiger; `gpt-4.1-mini` unbrauchbar (falsche Punkte,
+  verstümmelte Zeichen). Ein zweites Modell braucht einen Eintrag in `PREISE` und eine Auswahl im UI.
   Preise pro Million Tokens stehen nur in `PREISE` in `app/umwandeln.py` (Preisrechner nach der
   Umwandlung); ein neues Modell braucht dort einen Eintrag, sonst zeigt der Rechner «–».
 - **YAML einfügen:** Lehrperson kopiert `app/prompt_extern.md` in die eigene KI und fügt die

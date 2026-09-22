@@ -415,7 +415,6 @@ def _frage(q: dict) -> dict:
 # Bei Preisänderung nur hier anpassen; die App rechnet damit nach jeder Umwandlung.
 PREISE = {
     "gpt-5.6-luna": (0.20, 1.20),
-    "gpt-4.1": (2.00, 8.00),
 }
 
 
