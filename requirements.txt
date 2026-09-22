@@ -1,0 +1,7 @@
+# Streamlit Community Cloud liest diese Datei im Wurzelverzeichnis des Repos.
+# Lokal dasselbe: app/.venv/Scripts/python -m pip install -r requirements.txt
+streamlit>=1.40
+openai>=2.0
+httpx
+pymupdf
+pyyaml

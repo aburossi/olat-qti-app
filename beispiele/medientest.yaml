@@ -1,0 +1,21 @@
+# Prüft das Einbetten von Video (YouTube) und Audio (mp3-Link) per `medien:`.
+titel: MEDIENTEST olat-qti
+fragen:
+  - typ: sc
+    titel: M1 Video (YouTube)
+    frage: Schauen Sie das Video an. Wer singt dieses Lied?
+    medien:
+      - https://www.youtube.com/watch?v=dQw4w9WgXcQ
+    antworten:
+      - {text: Rick Astley, richtig: true}
+      - Phil Collins
+      - Bruce Springsteen
+      - Sting
+
+  - typ: freitext
+    titel: M2 Audio (SRF mp3)
+    punkte: 2
+    zeilen: 5
+    frage: Hören Sie den Beitrag. Fassen Sie ihn in drei Sätzen zusammen.
+    medien:
+      - https://download-media.srf.ch/world/audio/Corona_kompakt_radio/2026/09/Corona_kompakt_radio_AUDI20260921_NR_0023_6ee934efe47c4bf0928cd2f42c6c2e93.mp3

@@ -1,0 +1,18 @@
+ausgabe/
+__pycache__/
+*.pyc
+app/.venv/
+app/.streamlit/secrets.toml
+
+# Schlüssel nie ins Repo — auf jeder Ebene
+**/.streamlit/secrets.toml
+.venv/
+
+# Nicht ins öffentliche Repo: echte Prüfungen und OLAT-Exporte (Weg 1, 22.09.2026).
+# Bleiben lokal und über die OneDrive-Sicherung von D:\OS gesichert.
+referenz/
+saetze/
+# Diese drei Beispiele zitieren Fragen aus einer echten Prüfung (Gegenstücke zu referenz/).
+beispiele/hinweis.yaml
+beispiele/loesung.yaml
+beispiele/latex.yaml

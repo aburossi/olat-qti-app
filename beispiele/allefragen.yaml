@@ -1,0 +1,102 @@
+# Nachbau von referenz/ALLEFRAGEN.zip (OpenOlat-Export, 22.09.2026).
+# tests/test_referenz.py baut diesen Satz und vergleicht jede Frage mit dem Original.
+titel: ALLE-FRAGEN
+fragen:
+  - typ: sc
+    titel: Single Choice
+    frage: Was ist die Hauptstadt der Schweiz?
+    antworten:
+      - {text: Bern, richtig: true}
+      - Zürich
+
+  - typ: mc
+    titel: Multiple Choice
+    frage: Welche der folgenden Farben sind Grundfarben?
+    antworten:
+      - {text: Rot, richtig: true}
+      - {text: Grün, richtig: true}
+      - Lila
+
+  - typ: kprim
+    titel: Kprim
+    frage: Kreuzen Sie an, ob die folgenden Aussagen zur Schweiz richtig oder falsch sind.
+    aussagen:
+      - {text: Bern ist die Hauptstadt der Schweiz., richtig: true}
+      - {text: Die Schweiz hat 30 Kantone., richtig: false}
+      - {text: Die Schweiz hat vier Landessprachen., richtig: true}
+      - {text: Die Schweiz liegt am Meer., richtig: false}
+
+  - typ: match
+    titel: Matrix
+    frage: Ordnen Sie die Tiere der richtigen Kategorie zu.
+    zeilen: [Hund, Papagei]
+    spalten: [Säugetier, Vogel]
+    loesung: {Hund: Säugetier, Papagei: Vogel}
+
+  - typ: matchdraganddrop
+    titel: Drag and Drop
+    frage: Ordnen Sie die Begriffe den passenden Kategorien zu.
+    zeilen: [Bern, Rhein]
+    spalten: [Hauptstädte, Flüsse]
+    loesung: {Bern: Hauptstädte, Rhein: Flüsse}
+
+  - typ: matchtruefalse
+    titel: True/false
+    frage: Kreuzen Sie an, ob die Aussagen richtig oder falsch sind.
+    aussagen:
+      - {text: Die Erde ist ein Planet., richtig: true}
+      - {text: Die Sonne kreist um die Erde., richtig: false}
+
+  - typ: fib
+    titel: Lückentext
+    text: Die Hauptstadt der Schweiz heisst {{Bern}}
+
+  - typ: numerical
+    titel: Lückentext numerisch
+    text: Wasser kocht bei {{#100}} Grad Celsius (bei Normaldruck).
+
+  - typ: inlinechoice
+    titel: Lückentext mit Dropdown
+    text: Die Erde dreht sich um die {{*Sonne|Mond}}.
+
+  - typ: gapmixed
+    titel: Lückentext gemischt
+    text: Der europaeische Sitz der UNO befindet sich in {{Genf}}.
+
+  - typ: hottext
+    titel: Hottext
+    text: Der Eiffelturm steht in [[*Paris]].
+
+  - typ: hotspot
+    titel: Hotspot
+    frage: Klicken Sie auf den blauen Kreis.
+    bild: ../referenz/allefragen/hotspot.png
+    breite: 400
+    hoehe: 300
+    bereiche:
+      - {form: circle, koord: "55,77,16", richtig: true}
+      - {form: circle, koord: "60,60,25"}
+
+  - typ: order
+    titel: Reihenfolge
+    frage: Bringen Sie die Schritte der Wassererhitzung in die richtige Reihenfolge.
+    elemente:
+      - Topf mit Wasser füllen
+      - Topf auf den Herd stellen
+      - Wasser zum Kochen bringen
+      - Nudeln hinzufügen
+
+  - typ: essay
+    titel: Freitext
+    frage: Beschreiben Sie in eigenen Worten, was Nachhaltigkeit für Sie bedeutet (mind. 3 Sätze).
+
+  - typ: upload
+    titel: Datei hochladen
+    frage: Laden Sie Ihre schriftliche Zusammenfassung als PDF-Datei hoch.
+
+  - typ: drawing
+    titel: Zeichnen
+    frage: Skizzieren Sie den Aufbau einer Pflanzenzelle und beschriften Sie die wichtigsten Bestandteile.
+    bild: ../referenz/allefragen/zeichnen_bg.png
+    breite: 500
+    hoehe: 350

@@ -1,0 +1,39 @@
+# Test: Bilder im Fragetext (erzeugt von tests/test_bilder.py, 22.09.2026).
+# Noch nicht an einem OLAT-Export verifiziert — in OLAT importieren und ansehen.
+titel: BILDTEST olat-qti
+sektionen:
+  - titel: Teil A – Diagramme
+    fragen:
+      - typ: sc
+        titel: A1 Diagramm lesen (PNG)
+        frage: Welcher Werkstoff hat im Diagramm die grösste Dehnung?
+        bilder:
+          - {datei: bilder/s1_bild1.png, alt: "Spannungs-Dehnungs-Diagramm mit drei Werkstoffen"}
+        antworten:
+          - {text: "Aluminium", richtig: true}
+          - {text: "Baustahl", richtig: false}
+          - {text: "hochfester Stahl", richtig: false}
+
+      - typ: sc
+        titel: A2 Proben erkennen (JPEG)
+        frage: Welche Probe ist Kupfer?
+        bilder:
+          - {datei: bilder/s2_bild1.jpg, alt: "Drei Werkstoffproben A, B und C"}
+        antworten:
+          - {text: "Probe A", richtig: false}
+          - {text: "Probe B", richtig: true}
+          - {text: "Probe C", richtig: false}
+
+  - titel: Teil B – Offene Frage
+    fragen:
+      - typ: freitext
+        titel: B1 Zwei Bilder
+        punkte: 3
+        frage: |
+          Die Skizze zeigt ein Blech vor und nach dem Entlasten, das Diagramm die Werkstoffe.
+
+          Erklären Sie mit beiden Abbildungen, weshalb das Blech zurückfedert.
+        bilder:
+          - {datei: bilder/s2_bild2.png, alt: "Gebogenes Blech vor und nach dem Entlasten"}
+          - bilder/s1_bild1.png
+        musterloesung: Der **elastische** Anteil der Verformung federt zurück, der **plastische** bleibt.

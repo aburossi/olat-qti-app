@@ -1,0 +1,6 @@
+# Lokal: Streamlit beobachtet sonst nur den app-Ordner. Der Konverter olatqti.py liegt eine Ebene
+# höher — ohne diesen Eintrag lief nach einer Änderung am Konverter die ALTE Fassung weiter
+# (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten im Zip).
+# Relativ zum Startverzeichnis (app/), damit die Datei unter Linux/Streamlit Cloud nicht stört.
+[server]
+folderWatchList = [".."]

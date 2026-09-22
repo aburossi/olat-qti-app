@@ -1,0 +1,73 @@
+# Prüft, was der Referenz-Export NICHT abdeckt (README «Offen»).
+# In OLAT importieren, jede Frage in der Vorschau einmal richtig und einmal falsch lösen.
+titel: IMPORTTEST olat-qti
+sektionen:
+  - titel: Teil 1 – Lücken
+    fragen:
+      - typ: lueckentext
+        titel: T1 Mehrere Lücken mit Varianten
+        punkte: 2
+        frage: Ergänzen Sie.
+        text: |
+          Das Parlament der Schweiz heisst {{Bundesversammlung|Bundesparlament}}.
+          Es besteht aus dem Nationalrat und dem {{Ständerat|Staenderat}}.
+
+      - typ: numerisch
+        titel: T2 Zahl mit Toleranz
+        text: Der Nationalrat hat {{#200±2}} Sitze. (190–210 wäre falsch, 198–202 richtig)
+
+      - typ: gemischt
+        titel: T3 Gemischt – Text, Zahl, Dropdown
+        punkte: 3
+        text: >
+          Die Schweiz hat {{#26}} Kantone. Die Bundesrätinnen und Bundesräte werden
+          vom {{*Parlament|Volk|Bundesgericht}} gewählt. Die Hauptstadt ist {{Bern}}.
+
+  - titel: Teil 2 – Punkte und Mehrfachlösungen
+    mischen: true
+    fragen:
+      - typ: kprim
+        titel: T4 Kprim mit 2 Punkten
+        punkte: 2
+        frage: Richtig oder falsch?
+        aussagen:
+          - {text: Die Schweiz hat vier Landessprachen., richtig: true}
+          - {text: Der Bundesrat hat neun Mitglieder., richtig: false}
+          - {text: Das Stimmrechtsalter ist 18., richtig: true}
+          - {text: Der Ständerat hat 200 Sitze., richtig: false}
+
+      - typ: matrix
+        titel: T5 Matrix – eine Zeile, zwei Spalten
+        frage: Welche Staatsgewalt übt welche Aufgabe aus? (Mehrfachzuordnung möglich)
+        zeilen: [Gesetze beschliessen, Gesetze ausführen]
+        spalten: [Legislative, Exekutive, Judikative]
+        loesung:
+          Gesetze beschliessen: Legislative
+          Gesetze ausführen: Exekutive
+
+      - typ: hottext
+        titel: T6 Hottext mit zwei richtigen Stellen
+        frage: Markieren Sie alle Organe der Bundesebene.
+        text: Zur Bundesebene gehören der [[*Bundesrat]], der [[Gemeinderat]] und das [[*Bundesgericht]].
+
+      - typ: hotspot
+        titel: T7 Hotspot mit zwei richtigen Bereichen
+        frage: Klicken Sie beide Kreise an (Rechteck ist falsch).
+        bild: ../referenz/allefragen/hotspot.png
+        bereiche:
+          - {form: circle, koord: "55,77,16", richtig: true}
+          - {form: circle, koord: "200,150,30", richtig: true}
+          - {form: rect, koord: "300,20,380,80"}
+
+      - typ: freitext
+        titel: T8 Freitext mit Zeilenvorgabe
+        punkte: 4
+        zeilen: 8
+        frage: |
+          Erklären Sie das Prinzip der Gewaltenteilung.
+
+          Nennen Sie ein Beispiel aus der Schweiz.
+
+      - typ: zeichnen
+        titel: T9 Zeichnen ohne Hintergrundbild
+        frage: Zeichnen Sie ein Organigramm der drei Staatsgewalten.
