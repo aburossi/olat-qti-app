@@ -141,6 +141,11 @@ def aus_pdf() -> None:
 
     if not st.button("In Fragen umwandeln", type="primary"):
         return
+    if not st.secrets.get("openai", {}).get("api_key"):
+        st.error("In den Secrets fehlt der OpenAI-Schlüssel. Ergänzen:\n\n"
+                 '```toml\n[openai]\napi_key = "sk-…"\n```\n\n'
+                 "Ohne Schlüssel funktioniert der Weg «YAML einfügen» trotzdem.")
+        return
     text, anzahl = umwandeln.pdf_text(pdf.getvalue())
     if funde:
         text = umwandeln.pdf_text_mit_bildern(pdf.getvalue(), funde)

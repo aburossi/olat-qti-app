@@ -33,9 +33,6 @@ Auf share.streamlit.io → «New app»:
 App → Settings → Secrets, Inhalt von `app/.streamlit/secrets.toml.example` einfügen und ausfüllen:
 
 ```toml
-[app]
-url = "https://<deine-app>.streamlit.app"      # genau die Adresse der veröffentlichten App
-
 [supabase]
 url = "https://mbslkjxkleiudzsbjqau.supabase.co"
 anon_key = "sb_publishable_…"                   # öffentlicher Schlüssel, NIE service_role
@@ -44,7 +41,9 @@ anon_key = "sb_publishable_…"                   # öffentlicher Schlüssel, NI
 api_key = "sk-…"
 ```
 
-`[app] url` muss stimmen — sie ist das Rücksprungziel nach dem Microsoft-Login.
+Mehr braucht es nicht: Die App erkennt ihre eigene Adresse selbst und benutzt sie als Rücksprungziel
+nach dem Microsoft-Login. Ein Abschnitt `[app] url = "…"` ist nur nötig, wenn die App unter einem
+anderen Namen erreichbar sein soll (eigene Domain, Reverse Proxy).
 
 ## 4. Supabase freischalten
 

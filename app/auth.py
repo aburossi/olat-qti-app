@@ -24,13 +24,33 @@ GESPERRTE_DOMAINS = ("@lernende.bbw.ch",)
 GUELTIGKEIT_S = 600
 
 
+def app_url() -> str:
+    """Rücksprungziel nach dem Login: aus den Secrets, sonst die Adresse, unter der die App läuft.
+
+    Automatisch heisst: lokal http://localhost:8501, auf Streamlit Cloud die App-Adresse. Diese Adresse
+    muss in Supabase unter Redirect URLs freigeschaltet sein, sonst landet der Login auf bbw-hko.ch."""
+    if eingetragen := st.secrets.get("app", {}).get("url"):
+        return str(eingetragen).rstrip("/")
+    try:
+        teile = urllib.parse.urlsplit(st.context.url)
+        if teile.scheme and teile.netloc:
+            return f"{teile.scheme}://{teile.netloc}"
+    except Exception:  # ältere Streamlit-Version oder Aufruf ausserhalb einer Sitzung
+        pass
+    st.error("Die Adresse der App ist unbekannt. In den Secrets ergänzen:\n\n"
+             "```toml\n[app]\nurl = \"https://<deine-app>.streamlit.app\"\n```")
+    st.stop()
+
+
 def _cfg() -> tuple[str, str, str]:
     s = st.secrets
-    if not s["supabase"].get("anon_key"):
-        st.error("Konfiguration unvollständig: `supabase.anon_key` in `app/.streamlit/secrets.toml` ist leer "
-                 "(Wert von PUBLIC_SUPABASE_ANON_KEY aus dev/bbw-hko/.env).")
+    if not s.get("supabase", {}).get("anon_key") or not s.get("supabase", {}).get("url"):
+        st.error("In den Secrets fehlt der Supabase-Zugang. Ergänzen (Werte aus dem bbw-hko-Projekt, "
+                 "öffentlicher anon-Schlüssel, **nie** service_role):\n\n"
+                 "```toml\n[supabase]\nurl = \"https://mbslkjxkleiudzsbjqau.supabase.co\"\n"
+                 "anon_key = \"sb_publishable_…\"\n```")
         st.stop()
-    return s["supabase"]["url"].rstrip("/"), s["supabase"]["anon_key"], s["app"]["url"].rstrip("/")
+    return s["supabase"]["url"].rstrip("/"), s["supabase"]["anon_key"], app_url()
 
 
 def _grund(r: httpx.Response) -> str:
