@@ -159,9 +159,10 @@ def anmeldung() -> dict | None:
     st.markdown(f'<a href="{ziel}" target="_top" style="display:inline-block;padding:.6em 1.2em;'
                 f'background:#2f2f2f;color:#fff;border-radius:6px;text-decoration:none">'
                 f'Mit Microsoft anmelden</a>', unsafe_allow_html=True)
-    if getattr(st.context, "is_embedded", False):
-        st.caption("Diese Seite läuft eingebettet. Falls der Knopf nichts bewirkt, die App direkt "
-                   "über ihre eigene Adresse öffnen (nicht aus dem Streamlit-Dashboard heraus).")
+    # Ausweg, falls ein Rahmen die Navigation des Hauptfensters unterbindet: in neuem Tab anmelden.
+    st.markdown(f'<div style="margin-top:.6em;font-size:.85em">Klappt das nicht? '
+                f'<a href="{ziel}" target="_blank" rel="noopener">In neuem Tab anmelden</a> — '
+                f'dort geht es nach der Anmeldung weiter.</div>', unsafe_allow_html=True)
     with st.expander("Mit E-Mail und Passwort (Admin- und Testkonten)"):
         with st.form("passwort"):
             email = st.text_input("E-Mail")
