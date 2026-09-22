@@ -152,10 +152,16 @@ def anmeldung() -> dict | None:
     st.write("Anmeldung für Lehrpersonen der bbw mit dem Microsoft-Konto (wie bbw-hko.ch).")
     if fehler := st.session_state.pop("login_fehler", None):
         st.error(fehler)
-    # target=_self: im selben Tab zu Microsoft, sonst landet der Rücksprung in einem zweiten Tab
-    st.markdown(f'<a href="{login_url()}" target="_self" style="display:inline-block;padding:.6em 1.2em;'
+    # target=_top statt _self: Läuft die App eingebettet (Streamlit-Dashboard, iframe), würde _self nur
+    # den Rahmen ansteuern — Microsoft verbietet das Einbetten und Chrome meldet «hat die Verbindung
+    # abgelehnt». _top steuert das ganze Fenster an und verhält sich sonst wie _self (22.09.2026).
+    ziel = login_url()
+    st.markdown(f'<a href="{ziel}" target="_top" style="display:inline-block;padding:.6em 1.2em;'
                 f'background:#2f2f2f;color:#fff;border-radius:6px;text-decoration:none">'
                 f'Mit Microsoft anmelden</a>', unsafe_allow_html=True)
+    if getattr(st.context, "is_embedded", False):
+        st.caption("Diese Seite läuft eingebettet. Falls der Knopf nichts bewirkt, die App direkt "
+                   "über ihre eigene Adresse öffnen (nicht aus dem Streamlit-Dashboard heraus).")
     with st.expander("Mit E-Mail und Passwort (Admin- und Testkonten)"):
         with st.form("passwort"):
             email = st.text_input("E-Mail")
