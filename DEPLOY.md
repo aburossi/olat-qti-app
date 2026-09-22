@@ -56,6 +56,13 @@ https://<deine-app>.streamlit.app/**
 Die Site URL (`https://bbw-hko.ch`) bleibt unverändert. Ohne diesen Eintrag landet der Login
 wieder auf bbw-hko.ch statt in der App.
 
+## Login öffnet einen neuen Tab — mit Absicht
+
+Streamlit Cloud betreibt jede App in einem abgeschotteten Rahmen (`sandbox` ohne `allow-top-navigation`).
+Darin lässt sich Microsofts Anmeldeseite weder einbetten (Microsoft verbietet das) noch das Hauptfenster
+umlenken (der Rahmen darf das nicht). Deshalb öffnet der Anmeldeknopf einen neuen Tab; dort läuft die
+Anmeldung und danach die App. Lokal verhält es sich gleich, dort wäre es nicht nötig.
+
 ## 5. Prüfen
 
 1. App öffnen, mit Microsoft anmelden → Name und Rolle stehen oben.

@@ -152,17 +152,17 @@ def anmeldung() -> dict | None:
     st.write("Anmeldung für Lehrpersonen der bbw mit dem Microsoft-Konto (wie bbw-hko.ch).")
     if fehler := st.session_state.pop("login_fehler", None):
         st.error(fehler)
-    # target=_top statt _self: Läuft die App eingebettet (Streamlit-Dashboard, iframe), würde _self nur
-    # den Rahmen ansteuern — Microsoft verbietet das Einbetten und Chrome meldet «hat die Verbindung
-    # abgelehnt». _top steuert das ganze Fenster an und verhält sich sonst wie _self (22.09.2026).
+    # Immer in einem neuen Tab: Streamlit Cloud betreibt die App in einem abgeschotteten Rahmen
+    # (sandbox ohne allow-top-navigation). Darin kann weder _self noch _top zu Microsoft führen —
+    # Microsoft verbietet das Einbetten, und das Hauptfenster darf der Rahmen nicht umlenken.
+    # Im neuen Tab läuft die Anmeldung frei; er wird danach zur angemeldeten App (22.09.2026).
     ziel = login_url()
-    st.markdown(f'<a href="{ziel}" target="_top" style="display:inline-block;padding:.6em 1.2em;'
-                f'background:#2f2f2f;color:#fff;border-radius:6px;text-decoration:none">'
-                f'Mit Microsoft anmelden</a>', unsafe_allow_html=True)
-    # Ausweg, falls ein Rahmen die Navigation des Hauptfensters unterbindet: in neuem Tab anmelden.
-    st.markdown(f'<div style="margin-top:.6em;font-size:.85em">Klappt das nicht? '
-                f'<a href="{ziel}" target="_blank" rel="noopener">In neuem Tab anmelden</a> — '
-                f'dort geht es nach der Anmeldung weiter.</div>', unsafe_allow_html=True)
+    st.markdown(f'<a href="{ziel}" target="_blank" rel="noopener" '
+                f'style="display:inline-block;padding:.6em 1.2em;background:#2f2f2f;color:#fff;'
+                f'border-radius:6px;text-decoration:none">Mit Microsoft anmelden ↗</a>',
+                unsafe_allow_html=True)
+    st.caption("Die Anmeldung öffnet sich in einem neuen Tab. Nach dem Anmelden arbeiten Sie dort weiter — "
+               "dieses Fenster können Sie schliessen.")
     with st.expander("Mit E-Mail und Passwort (Admin- und Testkonten)"):
         with st.form("passwort"):
             email = st.text_input("E-Mail")
