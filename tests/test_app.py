@@ -6,14 +6,18 @@ mit dem Beispiel aus dem Prompt, eingebettet in eine KI-Antwort mit Codeblock.
 
     app/.venv/Scripts/python tests/test_app.py
 """
+import io
 import re
 import sys
+import zipfile
 from pathlib import Path
 
 import yaml
 from streamlit.testing.v1 import AppTest
 
 APP = Path(__file__).resolve().parent.parent / "app"
+sys.path[:0] = [str(APP), str(APP.parent)]
+import umwandeln  # noqa: E402
 FENCE = "`" * 3
 
 
@@ -111,6 +115,34 @@ def main() -> int:
         fehler.append("Preisangabe zum Modell fehlt")
     if at2.metric:
         fehler.append("Preisrechner erscheint auch ohne OpenAI-Umwandlung (YAML-Weg)")
+
+    # Bewertung wählbar (23.09.2026): pro Antwort mit/ohne Abzug oder alles richtig — geprüft am gebauten Zip
+    def mc_xml(wahl: str, mit_abzug: bool) -> str:
+        at4 = neu()
+        at4.session_state["yaml"] = beispiel
+        at4.session_state["pdf_name"] = "test"
+        at4.run()
+        at4.radio(key="bewertung").set_value(wahl)
+        at4.checkbox(key="abzug").set_value(mit_abzug)
+        at4.run()
+        next(b for b in at4.button if b.label == "Zip für OLAT bauen").click()
+        at4.run()
+        if "zip" not in at4.session_state:
+            return ""
+        with zipfile.ZipFile(io.BytesIO(at4.session_state["zip"])) as z:
+            return next(d for n in z.namelist() if n.endswith(".xml")
+                        and 'title="A2 Leichtmetalle"' in (d := z.read(n).decode("utf-8")))
+    pro, ohne, alles = (mc_xml("Punkte pro richtige Antwort", True), mc_xml("Punkte pro richtige Antwort", False),
+                        mc_xml("Punkte nur, wenn alles richtig ist", True))
+    if 'mappedValue="1.0"' not in pro or 'mappedValue="-0.5"' not in pro:
+        fehler.append("pro Antwort mit Abzug: Mapping fehlt")
+    if 'mappedValue="1.0"' not in ohne or 'mappedValue="0.0"' not in ohne or "-0.5" in ohne:
+        fehler.append("pro Antwort ohne Abzug: falsche Antworten ziehen trotzdem ab")
+    if not alles or "mapping" in alles:
+        fehler.append("alles richtig: trotzdem Teilpunkte")
+    kopf = umwandeln.mit_bewertung("---\nbewertung: alles\nabzug: 1\ntitel: x\nfragen:\n  - abzug: 2\n", True, False)
+    if kopf != "---\nbewertung: antwort\nabzug: 0\ntitel: x\nfragen:\n  - abzug: 2\n":
+        fehler.append(f"mit_bewertung: {kopf!r}")
 
     for x in fehler:
         print("FEHLER", x)

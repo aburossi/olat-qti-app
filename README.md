@@ -95,7 +95,10 @@ der Frage und wird gleichmässig verteilt:
 | richtigfalsch | `punkte` / Anzahl Aussagen | −½ davon; unbeantwortet 0 |
 | lueckentext, numerisch, dropdown | `punkte` / Anzahl Lücken, je Lücke für sich | 0 |
 
-`abzug: 0.5` setzt die Punkte je falsche Antwort fest (0 = kein Abzug). Die Frage fällt nie unter 0.
+`abzug: 0.5` setzt die Punkte je falsche Antwort fest (0 = kein Abzug), bei der Frage, der Sektion
+oder oben für den ganzen Test. **In der App** wählt die Lehrperson vor dem Bauen «Punkte pro richtige
+Antwort» oder «nur, wenn alles richtig ist» und ob falsche Antworten abziehen; die App schreibt das als
+`bewertung:`/`abzug:` oben ins YAML (`umwandeln.mit_bewertung()`), Angaben bei einzelnen Fragen gehen vor. Die Frage fällt nie unter 0.
 Beispiel mc mit 2 richtigen und 1 falschen, 1 Punkt: eine richtige gewählt = 0.5, alles angekreuzt = 0.75.
 `bewertung: alles` schaltet zurück auf OpenOlats Standard (volle Punkte nur bei ganz richtig).
 sc, kprim (eigene Halbpunkt-Regel), freitext/upload/zeichnen sind davon nicht betroffen. **gemischt,

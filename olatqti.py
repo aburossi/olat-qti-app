@@ -341,7 +341,7 @@ def pro_antwort(f: dict, typ: str) -> bool:
 def teilpunkte(f: dict, anzahl_richtige: int) -> tuple[float, float]:
     """(Punkte je richtige Antwort, Punkte je falsche Antwort ≤ 0)."""
     richtig = float(f.get("punkte", 1)) / anzahl_richtige
-    falsch = -float(f["abzug"]) if f.get("abzug") is not None else -richtig / 2
+    falsch = 0.0 - float(f["abzug"]) if f.get("abzug") is not None else -richtig / 2  # 0.0 - …: nie «-0.0»
     return richtig, falsch
 
 
@@ -1066,6 +1066,8 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
         for f in pflicht(sek, "fragen"):
             f = dict(f, _eigene=set(f))  # _eigene: was in der Frage selbst steht, nicht geerbt
             f.setdefault("bewertung", sek.get("bewertung", satz.get("bewertung", "antwort")))
+            if f.get("abzug") is None and sek.get("abzug", satz.get("abzug")) is not None:
+                f["abzug"] = sek.get("abzug", satz.get("abzug"))  # z. B. abzug: 0 für den ganzen Test
             typ, datei, datei_id, root, punkte, interaktionen = baue_frage(f, ids, bilder)
             dateien[datei] = xml_bytes(root)
             zeilen = "\n".join(f"                    <ns2:interactionType>{i}</ns2:interactionType>"

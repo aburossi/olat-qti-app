@@ -43,6 +43,10 @@ Streamlit, zwei Wege zum selben YAML → `olatqti.py` → Zip:
   `SYSTEM_ERWEITERT` = zusätzlich Tabellen und ### Zwischentitel. Gemeinsamer Teil in `SYSTEM_VORLAGE`.
   `test_referenz.py` braucht lxml — im App-venv fehlt es, mit einem Python mit lxml laufen lassen.
 
+**Bewertung** (23.09.2026): Standard «Punkte pro Antwort» mit halbem Abzug je falsche Antwort, nachgebaut
+aus `referenz/punkte_pro_antwort/`. In der App vor dem Bauen wählbar (pro Antwort / alles richtig, Abzug ja/nein),
+`umwandeln.mit_bewertung()` setzt es oben ins YAML. gemischt, hotspot, reihenfolge: noch alles oder nichts.
+
 **Nutzungszähler** (`app/zaehler.py`): je Umwandlung eine Zeile in `public.olat_umwandlungen` im
 bbw-hko-Supabase — wer, wann, Modell, Tokens, Kosten, Fragen/Seiten/Bilder, Quelle pdf|yaml.
 **Nie Inhalte** (keine Fragetexte, keine PDFs). Geschrieben wird mit dem Token der Lehrperson

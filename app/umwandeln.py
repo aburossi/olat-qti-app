@@ -501,6 +501,21 @@ def zu_fragensatz(roh: dict, erweitert: bool = False) -> dict:
     return satz
 
 
+_BEWERTUNG_OBEN = re.compile(r"^(?:bewertung|abzug)\s*:.*(?:\n|$)", re.M)
+
+
+def mit_bewertung(text: str, pro_antwort: bool = True, abzug: bool = True) -> str:
+    """Setzt die Wahl der Lehrperson oben ins YAML (`bewertung:`, `abzug:` für den ganzen Test) und
+    ersetzt, was dort schon stand. Angaben bei einzelnen Fragen (aus dem PDF) bleiben und gehen vor."""
+    kopf = "bewertung: antwort\n" if pro_antwort else "bewertung: alles\n"
+    if pro_antwort and not abzug:
+        kopf += "abzug: 0\n"
+    text = _BEWERTUNG_OBEN.sub("", text)
+    if (m := re.match(r"\s*---[^\n]*\n", text)):  # Dokumentanfang «---» bleibt vorne
+        return text[:m.end()] + kopf + text[m.end():]
+    return kopf + text
+
+
 def alle_fragen(satz: dict) -> list[tuple[str, dict]]:
     """(Sektionstitel, Frage) über alle Sektionen — auch für Sätze ohne `sektionen`."""
     if "sektionen" in satz:

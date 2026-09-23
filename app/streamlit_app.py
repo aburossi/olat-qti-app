@@ -30,7 +30,7 @@ st.set_page_config(page_title="OLAT-Test erstellen", page_icon="📝", layout="w
 
 # Der Konverter liegt ausserhalb des app-Ordners. Läuft eine alte Fassung im Speicher, entstehen still
 # falsche Pakete (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten). Lieber hart stoppen.
-KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke")
+KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke", "pro_antwort")
 if fehlt := [n for n in KONVERTER_BRAUCHT if not hasattr(olatqti, n)]:
     st.error(f"Die App läuft mit einer veralteten Fassung des Konverters (fehlt: {', '.join(fehlt)}). "
              "Bitte im Terminal mit Strg+C beenden und neu starten:\n\n"
@@ -398,11 +398,34 @@ with st.expander("Fragensatz bearbeiten (YAML)"):
         st.session_state.pop("zip", None)
         st.rerun()
 
+# ------------------------------------------------------------------ bewerten
+def _zip_veraltet() -> None:
+    st.session_state.pop("zip", None)
+
+
+with st.container(border=True):
+    st.markdown("**Bewertung**")
+    pro_antwort = st.radio(
+        "Bewertung", ["Punkte pro richtige Antwort", "Punkte nur, wenn alles richtig ist"],
+        key="bewertung", on_change=_zip_veraltet, label_visibility="collapsed",
+        help="Pro richtige Antwort: Die Punkte einer Frage werden auf ihre richtigen Antworten, Zuordnungen, "
+             "Aussagen und Lücken verteilt (Teilpunkte). Alles richtig: volle Punkte nur bei ganz richtiger "
+             "Antwort, sonst 0.") == "Punkte pro richtige Antwort"
+    abzug = st.checkbox(
+        "Falsche Antworten geben Abzug (die Hälfte einer richtigen)", value=True, key="abzug",
+        on_change=_zip_veraltet, disabled=not pro_antwort,
+        help="Ohne Abzug bringt «alles ankreuzen» bei Multiple Choice die volle Punktzahl. "
+             "Unter 0 fällt eine Frage nie. Bei Lücken gibt es nie Abzug.")
+    st.caption("Gilt für Multiple Choice, Matrix, Drag and Drop, Richtig/Falsch, Hottext und Lückentexte. "
+               "Single Choice, Kprim, gemischte Lücken, Hotspot und Reihenfolge haben eigene, feste Regeln. "
+               "Nennt das PDF bei einer Frage etwas anderes, gilt dort das PDF.")
+yaml_gebaut = umwandeln.mit_bewertung(st.session_state["yaml"], pro_antwort, abzug)
+
 # ------------------------------------------------------------------ bauen
 if st.button("Zip für OLAT bauen", type="primary"):
     with tempfile.TemporaryDirectory() as tmp:
         quelle = Path(tmp) / "fragen.yaml"
-        quelle.write_text(st.session_state["yaml"], encoding="utf-8")
+        quelle.write_text(yaml_gebaut, encoding="utf-8")
         if st.session_state.get("bilder"):
             (Path(tmp) / "bilder").mkdir()
             for name, daten in st.session_state["bilder"].items():
@@ -441,9 +464,9 @@ if "zip" in st.session_state:
     if st.session_state.get("bilder"):
         puffer = io.BytesIO()
         with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as zq:
-            zq.writestr(f"{name}.yaml", st.session_state["yaml"])
+            zq.writestr(f"{name}.yaml", yaml_gebaut)
             for bn, daten in st.session_state["bilder"].items():
                 zq.writestr(f"bilder/{bn}", daten)
         b.download_button("YAML + Bilder herunterladen", puffer.getvalue(), f"{name}_quelle.zip", "application/zip")
     else:
-        b.download_button("YAML herunterladen", st.session_state["yaml"].encode("utf-8"), f"{name}.yaml", "text/yaml")
+        b.download_button("YAML herunterladen", yaml_gebaut.encode("utf-8"), f"{name}.yaml", "text/yaml")
