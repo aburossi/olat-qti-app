@@ -217,8 +217,12 @@ def bloecke(text: str | None) -> list[ET.Element]:
                 geordnet = m[1] is not None
                 liste = E("ol" if geordnet else "ul")
                 while i < len(zeilen) and (m := LISTE.fullmatch(zeilen[i])) and (m[1] is not None) == geordnet:
-                    liste.append(inline(E("li"), m[2]))
+                    punkt = inline(E("li"), m[2])
                     i += 1
+                    while i < len(zeilen) and not _sonderzeile(zeilen[i]):  # umbrochener Punkt: Zeile gehört dazu
+                        anhaengen(punkt, " " + " ".join(zeilen[i].split()))
+                        i += 1
+                    liste.append(punkt)
                 out.append(liste)
             else:
                 j = i + 1

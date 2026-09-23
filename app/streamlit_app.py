@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import importlib
 import io
 import sys
 import tempfile
@@ -17,6 +18,10 @@ from openai import OpenAI
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import olatqti  # noqa: E402
 
+# olatqti.py liegt ausserhalb von app/ — Streamlit lädt es nach einem Push nicht selbst neu, die Cloud
+# baute sonst mit dem alten Konverter weiter (23.09.2026: Formatierung als rohe ** in OLAT)
+olatqti = importlib.reload(olatqti)
+
 import auth  # noqa: E402
 import zaehler  # noqa: E402
 import umwandeln  # noqa: E402
@@ -25,7 +30,7 @@ st.set_page_config(page_title="OLAT-Test erstellen", page_icon="📝", layout="w
 
 # Der Konverter liegt ausserhalb des app-Ordners. Läuft eine alte Fassung im Speicher, entstehen still
 # falsche Pakete (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten). Lieber hart stoppen.
-KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen")
+KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke")
 if fehlt := [n for n in KONVERTER_BRAUCHT if not hasattr(olatqti, n)]:
     st.error(f"Die App läuft mit einer veralteten Fassung des Konverters (fehlt: {', '.join(fehlt)}). "
              "Bitte im Terminal mit Strg+C beenden und neu starten:\n\n"

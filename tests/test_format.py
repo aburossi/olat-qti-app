@@ -31,6 +31,7 @@ FAELLE = [
     ("Doppelt\\\\\numbrochen", "<p>Doppelt<br />umbrochen</p>"),
     ("Enthält:\n- einen **Rat**,\n- ein Zitat.", "<p>Enthält:</p><ul><li>einen <strong>Rat</strong>,</li><li>ein Zitat.</li></ul>"),
     ("1. eins\n2. zwei", "<ol><li>eins</li><li>zwei</li></ol>"),
+    ("- Quelle (wer, wo,\nwann).\n- zwei", "<ul><li>Quelle (wer, wo, wann).</li><li>zwei</li></ul>"),
     ("| Stoff | Dichte |\n|---|---|\n| Alu | $2{,}7$ |",
      f'<table class="b_grid" style="{o.TABELLE_STIL}"><tbody><tr><th style="{o.RAHMEN}">Stoff</th>'
      f'<th style="{o.RAHMEN}">Dichte</th></tr><tr><td style="{o.RAHMEN}">Alu</td><td style="{o.RAHMEN}">'
@@ -116,6 +117,12 @@ def main() -> int:
         for soll in ("<h3>Titel</h3>", "1 eins<br />2 zwei", "<strong>fett</strong>", "<li>Punkt <em>eins</em></li>"):
             if soll not in item:
                 fehler.append(f"Item: «{soll}» fehlt")
+    import umwandeln
+    for ein, soll in [("**Die Situation**\n\nText", "### Die Situation\n\nText"),
+                      ("**Lehraufsicht:** Stelle", "**Lehraufsicht:** Stelle"),
+                      ("**Achtung: nur eine richtig.**", "**Achtung: nur eine richtig.**")]:
+        if (ist := umwandeln._zwischentitel(ein)) != soll:
+            fehler.append(f"_zwischentitel({ein!r}) = {ist!r}")
     pdf_test(fehler)
     referenz_test(fehler)
     demo_test(fehler)

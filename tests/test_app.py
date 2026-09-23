@@ -76,14 +76,13 @@ def main() -> int:
     if at2.exception or not any("kein gültiges YAML" in e.value for e in at2.error):
         fehler.append("kaputtes YAML ohne klare Meldung")
 
-    # Veralteter Konverter im Speicher: die App muss stoppen statt still falsche Pakete zu bauen
+    # Veralteter Konverter im Speicher (so auf der Cloud nach dem Push vom 23.09.2026): die App lädt ihn
+    # bei jedem Lauf neu von der Platte, statt still mit der alten Fassung Pakete zu bauen
     import olatqti
-    gemerkt = olatqti.inline
-    del olatqti.inline
+    del olatqti.bloecke
     at_alt = neu().run()
-    olatqti.inline = gemerkt
-    if not any("veralteten Fassung des Konverters" in e.value for e in at_alt.error):
-        fehler.append("kein Hinweis auf veralteten Konverter")
+    if not hasattr(sys.modules["olatqti"], "bloecke") or any("veralteten" in e.value for e in at_alt.error):
+        fehler.append("veralteter Konverter wird nicht neu geladen")
 
     # Preisrechner nach einer Umwandlung (Zahlen aus dem Gasgesetze-Lauf vom 22.09.2026)
     at3 = neu()

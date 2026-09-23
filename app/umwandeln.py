@@ -472,8 +472,25 @@ def _latex_reparieren(o):
     return o
 
 
+ALLEIN_FETT = re.compile(r"\*\*([^*\n]{1,80}?)\*\*")
+
+
+def _zwischentitel(text: str | None) -> str | None:
+    """Ein Absatz, der nur aus einer kurzen fetten Zeile besteht («**Die Situation**»), wird «### …» —
+    das Modell lässt die Fettung oft stehen, statt einen Titel zu setzen (23.09.2026)."""
+    if not text:
+        return text
+    absaetze = re.split(r"(\n\s*\n)", text)
+    for i, a in enumerate(absaetze):
+        m = ALLEIN_FETT.fullmatch(a.strip())
+        if m and not m[1].rstrip().endswith((".", ":", "!", "?")):
+            absaetze[i] = f"### {m[1].strip()}"
+    return "".join(absaetze)
+
+
 def _frage(q: dict) -> dict:
     q = _latex_reparieren(q)
+    q["frage"] = _zwischentitel(q.get("frage"))
     sauber = _saeubern(q)
     if sauber != q:
         q = sauber
