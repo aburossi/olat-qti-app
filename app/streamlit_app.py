@@ -164,18 +164,28 @@ def tipps_pdf() -> None:
                        "App. Als Muster für eigene Prüfungen oder zum Ausprobieren.")
 
 
-def openai_zugang(email: str) -> tuple[str | None, str]:
-    """(Schlüssel, Abrechnung): eigener Schlüssel einer anderen Schule, wenn das Konto dort aufgeführt ist,
-    sonst der bbw-Schlüssel. In den Secrets (23.09.2026, BMS):
+def openai_zugaenge(email: str) -> list[tuple[str | None, str]]:
+    """[(Schlüssel, Abrechnung), …] in der Reihenfolge, in der sie versucht werden: eigener Schlüssel einer
+    anderen Schule, wenn das Konto dort aufgeführt ist — mit `rueckfall = true` danach der bbw-Schlüssel
+    (BMS hatte am 23.09.2026 kein Guthaben); sonst nur der bbw-Schlüssel. In den Secrets:
         [schluessel.bms]
         name = "BMS"
         api_key = "sk-…"
-        konten = ["testuser@bms-w.ch"]"""
+        konten = ["testuser@bms-w.ch"]
+        rueckfall = true"""
     email = (email or "").strip().lower()
+    bbw = (st.secrets.get("openai", {}).get("api_key") or None, "bbw")
     for kuerzel, eintrag in (st.secrets.get("schluessel", {}) or {}).items():
         if email in {str(k).strip().lower() for k in eintrag.get("konten", [])}:
-            return eintrag.get("api_key") or None, str(eintrag.get("name", kuerzel))
-    return st.secrets.get("openai", {}).get("api_key") or None, "bbw"
+            eigen = (eintrag.get("api_key") or None, str(eintrag.get("name", kuerzel)))
+            return [eigen, bbw] if eintrag.get("rueckfall") else [eigen]
+    return [bbw]
+
+
+def schluessel_problem(e: Exception) -> bool:
+    """Liegt es am Schlüssel (kein Guthaben, ungültig) statt am PDF oder am Netz? Nur dann auf den nächsten."""
+    text = f"{getattr(e, 'code', '')} {getattr(e, 'status_code', '')} {e}".lower()
+    return any(w in text for w in ("insufficient_quota", "billing", "invalid_api_key", "401", "quota"))
 
 
 def aus_pdf() -> None:
@@ -227,13 +237,14 @@ def aus_pdf() -> None:
              "Tabellen als Aufzählung. Mit Haken: Jede Zeile eines nummerierten Texts bleibt eine eigene Zeile "
              "(z. B. für Fragen wie «Geben Sie die Zeile an»), Tabellen bleiben Tabellen, Zwischentitel werden "
              "Überschriften. Schriftgrösse und Farbe gehen in beiden Fällen nicht mit.")
-    schluessel, abrechnung = openai_zugang(nutzer["email"])
-    if abrechnung != "bbw":
-        st.caption(f"Die Umwandlung läuft über den OpenAI-Schlüssel der {abrechnung}.")
+    zugaenge = openai_zugaenge(nutzer["email"])
+    if zugaenge[0][1] != "bbw":
+        rueck = " — ohne Guthaben dort über den Schlüssel der bbw" if len(zugaenge) > 1 else ""
+        st.caption(f"Die Umwandlung läuft über den OpenAI-Schlüssel der {zugaenge[0][1]}{rueck}.")
     if not st.button("In Fragen umwandeln", type="primary"):
         return
-    if not schluessel:
-        st.error(f"In den Secrets fehlt der OpenAI-Schlüssel ({abrechnung}). Ergänzen:\n\n"
+    if not any(s for s, _ in zugaenge):
+        st.error(f"In den Secrets fehlt der OpenAI-Schlüssel ({zugaenge[0][1]}). Ergänzen:\n\n"
                  '```toml\n[openai]\napi_key = "sk-…"\n```\n\n'
                  "Ohne Schlüssel funktioniert der Weg «YAML einfügen» trotzdem.")
         return
@@ -247,12 +258,21 @@ def aus_pdf() -> None:
     bilder = umwandeln.seiten_als_bild(pdf.getvalue(), bildseiten) if bildseiten else []
     zusatz = f", davon {len(bilder)} als Bild" if bilder else ""
     with st.spinner(f"{anzahl} Seiten werden umgewandelt{zusatz} ({modell}) …"):
-        try:
-            roh, verbrauch = umwandeln.frage_openai(
-                OpenAI(api_key=schluessel), modell, text, bilder, erweitert=erweitert)
-        except Exception as e:  # Netz, Schlüssel, Kontingent, Abbruch — alles dem Menschen zeigen
-            st.error(f"Umwandlung fehlgeschlagen: {e}")
-            return
+        kandidaten = [(s, n) for s, n in zugaenge if s]
+        for i, (schluessel, abrechnung) in enumerate(kandidaten):
+            try:
+                roh, verbrauch = umwandeln.frage_openai(
+                    OpenAI(api_key=schluessel), modell, text, bilder, erweitert=erweitert)
+                break
+            except Exception as e:  # Netz, Schlüssel, Kontingent, Abbruch — alles dem Menschen zeigen
+                if i + 1 < len(kandidaten) and schluessel_problem(e):
+                    st.info(f"Der OpenAI-Schlüssel der {abrechnung} ist nicht nutzbar (kein Guthaben oder "
+                            f"ungültig) — die Umwandlung läuft über den Schlüssel der {kandidaten[i + 1][1]}.")
+                    continue
+                st.error(f"Umwandlung fehlgeschlagen: {e}")
+                return
+    if zugaenge[0][1] != "bbw" and abrechnung != zugaenge[0][1] and not zugaenge[0][0]:
+        st.info(f"Für die {zugaenge[0][1]} ist kein OpenAI-Schlüssel hinterlegt — umgewandelt über die {abrechnung}.")
     satz = umwandeln.zu_fragensatz(roh, erweitert=erweitert)
     umwandeln.pruefe_medien(satz, text)
     ohne_frage = umwandeln.pruefe_bilder(satz, {f["name"] for f in funde})
