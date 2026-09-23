@@ -177,7 +177,9 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
     («1 Was ist …», «2 Das Wichtigste …»), Gedichte und Adressen zeilengenau.
   - `### Zwischentitel` als eigene Zeile (z. B. «### Die Situation» oder der Titel eines Zeitungstexts).
   - Aufzählung: Zeilen mit `- `, nummeriert mit `1. `.
-  - Tabelle: `| Kopf | Kopf |`, darunter `|---|---|`, dann `| Zelle | Zelle |`.
+  - Tabelle: `| Kopf | Kopf |`, darunter `|---|---|`, dann `| Zelle | Zelle |` — jede Tabellenzeile auf
+    einer Zeile, gleich viele Zellen, leere Zelle `| |`; ohne Kopfzeile die Zeile `|---|---|` weglassen.
+    OLAT zeigt sie mit Gitterlinien.
   - Nicht als Formatierung übernehmen: fette Fragenummern und Punktangaben, Kopf- und Fusszeilen.
 - Formeln als LaTeX zwischen Dollarzeichen, z. B. $p \cdot V = n \cdot R \cdot T$ oder $\frac{V_1}{T_1} = \frac{V_2}{T_2}$ — in allen Texten: `frage`, Antworten, Aussagen, `hinweis`, `musterloesung` und im `text` von Lückentypen, nur nicht in der Lücke selbst («$p_2$ = {{#3±0.05}} bar»). OLAT zeigt sie als gesetzte Formel. Ein echtes Dollarzeichen als \$ schreiben.
 - `hinweis` und `musterloesung` gibt es **nur bei `freitext`** — bei anderen Typen weglassen.

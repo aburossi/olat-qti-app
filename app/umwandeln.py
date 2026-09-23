@@ -156,7 +156,9 @@ Der PDF-Text kommt mit seiner Formatierung: **fett**, *kursiv*, «- » vor Aufz�
 - Aufzählungen: jeder Punkt eine Zeile mit «- » (nummeriert: «1. »), über mehrere PDF-Zeilen umbrochene
   Punkte zu einer Zeile verbinden.
 - Tabellen mit Inhalt (Werte, Angaben) als Markdown-Tabelle übernehmen: | Kopf | Kopf |, |---|---|,
-  | Zelle | Zelle |. Ankreuztabellen (richtig/falsch, Zuordnung) werden der passende Fragetyp, keine Tabelle.
+  | Zelle | Zelle |. Jede Tabellenzeile auf einer Zeile, jede Zeile mit gleich vielen Zellen; leere Zelle = | |.
+  Ohne Kopfzeile im PDF die Zeile |---|---| weglassen. Ankreuztabellen (richtig/falsch, Zuordnung) werden der
+  passende Fragetyp, keine Tabelle. Eine Tabelle, die Lernende ausfüllen sollen, als leere Tabelle in `frage`.
 - Ein echtes Sternchen als \\* schreiben.
 
 FORMELN

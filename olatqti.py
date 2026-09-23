@@ -177,15 +177,20 @@ def textabsatz(zeilen: list[str]) -> ET.Element:
     return el
 
 
+# So schreibt der OLAT-Editor eine Tabelle mit Gitter (referenz/formatierung_demo/, 23.09.2026)
+RAHMEN = "border-color:rgb( 126 , 140 , 141 )"
+TABELLE_STIL = f"border-collapse:collapse;width:100%;{RAHMEN};border-style:solid;margin-left:0px;margin-right:auto"
+
+
 def tabelle(zeilen: list[str]) -> ET.Element:
     kopf = len(zeilen) > 1 and TRENNER.fullmatch(zeilen[1].replace(" ", ""))
     body = E("tbody")
     for n, z in enumerate(zeilen):
         if n == 1 and kopf:
             continue
-        body.append(E("tr", None, *[inline(E("th" if kopf and n == 0 else "td"), " ".join(c.split()))
+        body.append(E("tr", None, *[inline(E("th" if kopf and n == 0 else "td", {"style": RAHMEN}), " ".join(c.split()))
                                     for c in z.strip()[1:-1].split("|")]))
-    return E("table", None, body)
+    return E("table", {"class": "b_grid", "style": TABELLE_STIL}, body)
 
 
 def bloecke(text: str | None) -> list[ET.Element]:

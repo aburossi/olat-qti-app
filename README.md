@@ -95,9 +95,10 @@ weg), setzt an ihrer Stelle «[Bild: s2_bild1.jpg]» in den Text, und das Modell
 `### Titel` → `<h3>` (`####` → `<h4>`), `- Punkt` → `<ul>`, `1. Punkt` → `<ol>`, `| a | b |` (mit `|---|`
 nach der Kopfzeile) → `<table>`. Zeilen eines Absatzes werden zu Fliesstext verbunden, ausser eine Zeile endet
 mit `\` (→ `<br/>`) oder **jede** Zeile beginnt mit einer Nummer (Text mit Zeilennummern: jede Zeile bleibt).
-In Antworten/Aussagen/Lückentext nur fett, kursiv, Formeln. Vorbild: Pietros Nachformatierung in OLAT
-(`referenz/formatierung/`, 23.09.2026: `<h3>`, `<strong>`, `<br/>`); `<em>`, Listen und Tabellen sind
-QTI-konform, aber noch nicht an einem OLAT-Export verifiziert. Die App liefert dem Modell den PDF-Text schon
+In Antworten/Aussagen/Lückentext nur fett, kursiv, Formeln. Alles an OLAT-Exporten verifiziert
+(23.09.2026): `referenz/formatierung/` (Pietros Nachformatierung einer echten Umwandlung) und
+`referenz/formatierung_demo/` (Demo, in OLAT importiert und nachformatiert). Tabellen bekommen dort wie im
+OLAT-Editor `class="b_grid"` und Rahmenstile, sonst zeigt OLAT sie ohne Gitter. Die App liefert dem Modell den PDF-Text schon
 mit `**fett**`, `*kursiv*`, `- ` (auch gezeichnete Aufzählungspunkte) und Markdown-Tabellen; Zeilennummern am
 Rand stehen vor ihrer Zeile. Schriftgrösse und Farbe gehen nicht mit.
 

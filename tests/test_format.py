@@ -32,9 +32,11 @@ FAELLE = [
     ("Enthält:\n- einen **Rat**,\n- ein Zitat.", "<p>Enthält:</p><ul><li>einen <strong>Rat</strong>,</li><li>ein Zitat.</li></ul>"),
     ("1. eins\n2. zwei", "<ol><li>eins</li><li>zwei</li></ol>"),
     ("| Stoff | Dichte |\n|---|---|\n| Alu | $2{,}7$ |",
-     '<table><tbody><tr><th>Stoff</th><th>Dichte</th></tr><tr><td>Alu</td>'
-     '<td><span class="math" title="2%7B%2C%7D7">2{,}7</span></td></tr></tbody></table>'),
-    ("| a | b |\n| c | d |", "<table><tbody><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></tbody></table>"),
+     f'<table class="b_grid" style="{o.TABELLE_STIL}"><tbody><tr><th style="{o.RAHMEN}">Stoff</th>'
+     f'<th style="{o.RAHMEN}">Dichte</th></tr><tr><td style="{o.RAHMEN}">Alu</td><td style="{o.RAHMEN}">'
+     '<span class="math" title="2%7B%2C%7D7">2{,}7</span></td></tr></tbody></table>'),
+    ("| a | b |\n| c | d |", f'<table class="b_grid" style="{o.TABELLE_STIL}"><tbody><tr><td style="{o.RAHMEN}">a</td>'
+     f'<td style="{o.RAHMEN}">b</td></tr><tr><td style="{o.RAHMEN}">c</td><td style="{o.RAHMEN}">d</td></tr></tbody></table>'),
     ("Nur 2 Zeilen\n5 beginnt mit Zahl", "<p>Nur 2 Zeilen 5 beginnt mit Zahl</p>"),
 ]
 
@@ -76,6 +78,23 @@ def referenz_test(fehler: list[str]) -> None:
         fehler.append(f"Referenz nutzt {sorted(ref_tags)}, wir {sorted(neu_tags)}")
 
 
+def demo_test(fehler: list[str]) -> None:
+    """Pietros Demo, in OLAT nachformatiert: Titel, Listen, kursiv identisch; Tabelle mit Klasse und Stil wie OLAT."""
+    ordner = WURZEL / "referenz" / "formatierung_demo"
+    if not ordner.is_dir():
+        print("referenz/formatierung_demo/ fehlt — Demo-Vergleich übersprungen")
+        return
+    ref = next(ordner.glob("essay*.xml")).read_text(encoding="utf-8")
+    body = re.search(r"<itemBody>(.*?)<table", ref, re.S)[1]
+    neu = html("### Zwischentitel\nText mit **fett** und *kursiv*.\n\nAufzählung:\n- erster Punkt\n"
+               "- zweiter Punkt mit **fett**\n\nNummeriert:\n1. erster Schritt\n2. zweiter Schritt")
+    if neu != body:
+        fehler.append(f"Demo vor der Tabelle\n    ist:  {neu}\n    OLAT: {body}")
+    for teil in (f'<table class="b_grid" style="{o.TABELLE_STIL}">', f'<td style="{o.RAHMEN}">Spalte 1 Zeile 1'):
+        if teil not in ref:
+            fehler.append(f"OLAT-Export enthält «{teil}» nicht — Tabellenstil prüfen")
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     fehler = []
@@ -99,6 +118,7 @@ def main() -> int:
                 fehler.append(f"Item: «{soll}» fehlt")
     pdf_test(fehler)
     referenz_test(fehler)
+    demo_test(fehler)
     for f in fehler:
         print("FEHLER", f)
     print(f"Format-Test: {len(fehler)} Fehler")
