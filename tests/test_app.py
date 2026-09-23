@@ -40,6 +40,15 @@ def main() -> int:
     if not any("So formatieren Sie Ihr PDF" in e.label for e in at.expander) \
             or not any("Fragetyp in die Überschrift" in m.value for m in at.markdown):
         fehler.append("Tipps zum PDF fehlen")
+    # Gastkonten ausserhalb der bbw: nur mit Freigabe in den Secrets, Lernendenkonten nie
+    for email, rolle, soll in [("test@olat.ch", "gast", True), ("gast@bbw.ch", "gast", False),
+                               ("x@lernende.bbw.ch", "lp", False), ("lp@bbw.ch", "lp", True)]:
+        a = AppTest.from_file(str(APP / "streamlit_app.py"), default_timeout=30)
+        a.secrets["zugang"] = {"gastkonten": ["test@olat.ch"]}
+        a.session_state["nutzer"] = {"id": "1", "email": email, "name": "x", "rolle": rolle, "token": ""}
+        a.run()
+        if any("keinen Zugang" in e.value for e in a.error) == soll:
+            fehler.append(f"Zugang {email} ({rolle}): {'gesperrt' if soll else 'zugelassen'}")
     if not (APP.parent / "beispiele" / "Vorlage_Fragetypen_mit_Loesungen.pdf").is_file():
         fehler.append("Vorlage-PDF fehlt in beispiele/")
     seite = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)

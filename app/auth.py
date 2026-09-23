@@ -24,6 +24,17 @@ GESPERRTE_DOMAINS = ("@lernende.bbw.ch",)
 GUELTIGKEIT_S = 600
 
 
+def gastkonten() -> set[str]:
+    """Konten ausserhalb der bbw (z. B. test@olat.ch) mit Rolle «gast» in bbw-hko — dort ohne Rechte einer
+    Lehrperson, hier trotzdem zugelassen. Liste in den Secrets, nicht im Code (23.09.2026):
+        [zugang]
+        gastkonten = ["test@olat.ch"]"""
+    try:
+        return {str(e).strip().lower() for e in st.secrets.get("zugang", {}).get("gastkonten", [])}
+    except Exception:  # keine Secrets-Datei (Tests)
+        return set()
+
+
 def app_url() -> str:
     """Rücksprungziel nach dem Login: aus den Secrets, sonst die Adresse, unter der die App läuft.
 
@@ -140,7 +151,8 @@ def anmeldung() -> dict | None:
     nutzer = st.session_state.get("nutzer")
     if nutzer:
         gesperrt = nutzer["email"].lower().endswith(GESPERRTE_DOMAINS)
-        if nutzer["rolle"] not in ERLAUBTE_ROLLEN or gesperrt:
+        freigegeben = nutzer["rolle"] in ERLAUBTE_ROLLEN or nutzer["email"].lower() in gastkonten()
+        if not freigegeben or gesperrt:
             st.error("Dieses Konto hat keinen Zugang. Die App ist für Lehrpersonen der bbw — "
                      "bitte mit dem persönlichen Lehrpersonen-Konto anmelden.")
             if st.button("Abmelden"):

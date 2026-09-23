@@ -51,6 +51,8 @@ liefert `public.olat_nutzung(tage)` (security definer mit Rollencheck). Migratio
 `olat_umwandlungen_zaehler` vom 22.09.2026. Zählerfehler dürfen die App nie stoppen.
 
 Login = Microsoft über das Supabase-Projekt von bbw-hko (`app/auth.py`), gleiche Konten und Rollen; Zugang für `lp`, `kt1`, `reviewer`, nicht `gast`.
+Ausnahme: Konten ausserhalb der bbw in `[zugang] gastkonten` (Secrets) — in bbw-hko mit Rolle `gast`,
+damit sie dort keine Lehrpersonen-Rechte haben (neue Konten bekommen sonst automatisch `lp`, `handle_new_user`).
 Lokal: Preview `olat-qti-app` (Port 8501, fest — Rücksprung-URL). Tests:
 `app/.venv/Scripts/python tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
 (Seiten ohne Text werden erkannt und auf Wunsch als Bild an OpenAI geschickt). Das PDF geht an OpenAI — nur
