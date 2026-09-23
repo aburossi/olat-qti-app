@@ -99,12 +99,6 @@ class Ids:
         return (praefix + h)[:laenge]
 
 
-def absaetze(text: str | None) -> list[str]:
-    if not text:
-        return []
-    return [" ".join(a.split()) for a in re.split(r"\n\s*\n", str(text).strip()) if a.strip()]
-
-
 def js_escape(s: str) -> str:
     """Wie JavaScripts escape(): so kodiert OpenOlat die Formel im title-Attribut (referenz/latex/)."""
     return "".join(c if c.isascii() and (c.isalnum() or c in "@*_+-./")
@@ -323,6 +317,49 @@ def alles_oder_nichts(treffer: ET.Element, leer_zuerst: bool = False) -> ET.Elem
     return verarbeitung(E("responseCondition", None, *zweige))
 
 
+# --------------------------------------------------------------- Punkte pro Antwort
+# OpenOlat-Reiter Bewertung → «Punkte pro Antwort» (referenz/punkte_pro_antwort/, 23.09.2026).
+# `punkte` bleibt die Summe der Frage; sie wird gleichmässig auf die richtigen Antworten verteilt.
+# Eine falsche Wahl kostet standardmässig eine halbe richtige (so im Export), `abzug:` setzt es fest.
+# Unter 0 fällt die Frage nie (MINSCORE).
+
+PRO_ANTWORT = {"mc", "match", "matchdraganddrop", "matchtruefalse", "hottext", "fib", "numerical", "inlinechoice"}
+# gapmixed, hotspot, order: noch kein Export mit «Punkte pro Antwort» — bleiben bei alles oder nichts
+
+
+def pro_antwort(f: dict, typ: str) -> bool:
+    art = str(f.get("bewertung", "antwort")).lower()
+    if art not in ("antwort", "alles"):
+        raise FehlerImFragensatz(f"«{f['titel']}»: bewertung ist «antwort» oder «alles», nicht «{art}»")
+    if art == "antwort" and typ not in PRO_ANTWORT:
+        if "bewertung" in f.get("_eigene", ()):
+            raise FehlerImFragensatz(f"«{f['titel']}»: {typ} kann (noch) keine Punkte pro Antwort")
+        return False
+    return art == "antwort"
+
+
+def teilpunkte(f: dict, anzahl_richtige: int) -> tuple[float, float]:
+    """(Punkte je richtige Antwort, Punkte je falsche Antwort ≤ 0)."""
+    richtig = float(f.get("punkte", 1)) / anzahl_richtige
+    falsch = -float(f["abzug"]) if f.get("abzug") is not None else -richtig / 2
+    return richtig, falsch
+
+
+def mapping(eintraege, default="0.0", **extra) -> ET.Element:
+    return E("mapping", {"defaultValue": default},
+             *[E("mapEntry", {"mapKey": k, "mappedValue": zahl(w), **extra}) for k, w in eintraege])
+
+
+def summe_pro_antwort(resp="RESPONSE_1") -> ET.Element:
+    """SCORE += mapResponse, bei richtig wie bei falsch; nur das Feedback unterscheidet sich."""
+    def plus():
+        return E("setOutcomeValue", {"identifier": "SCORE"},
+                 E("sum", None, var("SCORE"), E("mapResponse", {"identifier": resp})))
+    return verarbeitung(E("responseCondition", None,
+                          E("responseIf", None, ist_richtig(resp), plus(), setze_feedback("correct")),
+                          E("responseElse", None, plus(), setze_feedback("incorrect"))))
+
+
 def item(ident: str, titel: str, decls: list, body: ET.Element, rp: ET.Element) -> ET.Element:
     root = E("assessmentItem", {"identifier": ident, "title": titel, "adaptive": "false",
                                 "timeDependent": "false", **TOOL})
@@ -370,12 +407,18 @@ def bau_choice(f, ids, typ):
     decl = E("responseDeclaration", {"identifier": "RESPONSE_1",
              "cardinality": "single" if typ == "sc" else "multiple", "baseType": "identifier"},
              E("correctResponse", None, *[value(cid[t]) for t in richtige]))
+    teil = pro_antwort(f, typ)
+    if teil:
+        plus, minus = teilpunkte(f, len(richtige))
+        decl.append(mapping((cid[t], plus if r else minus) for t, r in antworten))
     ia = {"responseIdentifier": "RESPONSE_1", "shuffle": str(f.get("mischen", True)).lower()}
     ia |= {"maxChoices": "1"} if typ == "sc" else {"maxChoices": "0", "minChoices": "0"}
     ia["orientation"] = "vertical"
     inter = E("choiceInteraction", ia,
               *[E("simpleChoice", {"identifier": cid[t]}, p(t)) for t, _ in antworten])
     body = E("itemBody", None, *stamm(f, ids), inter)
+    if teil:
+        return [decl], body, summe_pro_antwort()
     return [decl], body, alles_oder_nichts(ist_richtig(), leer_zuerst=(typ == "sc"))
 
 
@@ -449,6 +492,11 @@ def bau_match(f, ids, typ):
     decl = E("responseDeclaration", {"identifier": "RESPONSE_1", "cardinality": "multiple",
                                      "baseType": "directedPair"},
              E("correctResponse", None, *[value(f"{zid[z]} {sid[s]}") for z, s in paare]))
+    teil = pro_antwort(f, typ)
+    if teil:
+        plus, minus = teilpunkte(f, len(paare))
+        decl.append(mapping((f"{zid[z]} {sid[s]}", plus if (z, s) in paare else minus)
+                            for z in zeilen for s in spalten))
 
     def satz(d):
         return E("simpleMatchSet", None, *[
@@ -458,7 +506,7 @@ def bau_match(f, ids, typ):
                                    "shuffle": str(f.get("mischen", False)).lower(), "maxAssociations": "0"},
               satz(zid), satz(sid))
     body = E("itemBody", None, *stamm(f, ids), inter)
-    return [decl], body, alles_oder_nichts(ist_richtig())
+    return [decl], body, summe_pro_antwort() if teil else alles_oder_nichts(ist_richtig())
 
 
 def bau_truefalse(f, ids, typ):
@@ -469,7 +517,12 @@ def bau_truefalse(f, ids, typ):
                                      "baseType": "directedPair"},
              E("correctResponse", None, *[value(f"{i} {richtig if r else falsch}")
                                           for i, (_, r) in zip(aid, aussagen)]))
-    inter = E("matchInteraction", {"class": "match_true_false source-right", "responseIdentifier": "RESPONSE_1",
+    teil = pro_antwort(f, typ)
+    if teil:
+        plus, minus = teilpunkte(f, len(aussagen))
+        decl.append(mapping(e for i, (_, r) in zip(aid, aussagen) for e in (
+            (f"{i} {richtig}", plus if r else minus), (f"{i} {falsch}", minus if r else plus), (f"{i} {offen}", 0))))
+    inter =E("matchInteraction", {"class": "match_true_false source-right", "responseIdentifier": "RESPONSE_1",
                                    "shuffle": str(f.get("mischen", False)).lower(), "maxAssociations": "0"},
               E("simpleMatchSet", None, *[
                   E("simpleAssociableChoice", {"identifier": i, "matchMax": "1", "matchMin": "0"}, p(t))
@@ -478,10 +531,38 @@ def bau_truefalse(f, ids, typ):
                   E("simpleAssociableChoice", {"identifier": i, "matchMax": "0", "matchMin": "0"}, p(t))
                   for i, t in ((offen, "Unbeantwortet"), (richtig, "Richtig"), (falsch, "Falsch"))]))
     body = E("itemBody", None, *stamm(f, ids), inter)
-    return [decl], body, alles_oder_nichts(ist_richtig())
+    return [decl], body, summe_pro_antwort() if teil else alles_oder_nichts(ist_richtig())
 
 
 LUECKE = re.compile(r"\{\{(.+?)\}\}")
+
+
+def absatz_mit_stellen(zeilen: list[str], muster: re.Pattern, stelle) -> ET.Element:
+    """<p> aus Zeilen, in denen `muster` Lücken oder Hottexte markiert; `stelle(m)` baut das Element.
+    Eine Zeile, die mit \\ endet, bricht um (<br/>), sonst werden die Zeilen mit Leerzeichen verbunden."""
+    el = E("p")
+    for i, z in enumerate(zeilen):
+        umbruch = z.endswith("\\")
+        z = z.rstrip("\\").rstrip() if umbruch else z
+        pos = 0
+        for m in muster.finditer(z):
+            anhaengen(el, z[pos:m.start()])
+            el.append(stelle(m))
+            pos = m.end()
+        anhaengen(el, z[pos:])
+        if i < len(zeilen) - 1:
+            if umbruch:
+                el.append(E("br"))
+            else:
+                anhaengen(el, " ")
+    if len(el) and not el[-1].tail:
+        el[-1].tail = None
+    return el
+
+
+def zeilen_je_absatz(text) -> list[list[str]]:
+    return [[" ".join(z.split()) for z in a.splitlines() if z.strip()]
+            for a in re.split(r"\n\s*\n", str(text).strip()) if a.strip()]
 
 
 def bau_luecken(f, ids, typ):
@@ -489,15 +570,25 @@ def bau_luecken(f, ids, typ):
          {{Bern|Berne}}   Texteingabe, jede Variante gilt
          {{#100}}         Zahl, {{#100±0.5}} mit Toleranz
          {{*Sonne|Mond}}  Dropdown, * markiert die richtige Option
-    fib erlaubt nur Text-, numerical nur Zahl-, inlinechoice nur Dropdown-Lücken."""
+    fib erlaubt nur Text-, numerical nur Zahl-, inlinechoice nur Dropdown-Lücken.
+    `optionen: [Mars, Venus]` hängt diese Optionen an jedes Dropdown der Frage an
+    (OpenOlats «globale Antworten», referenz/punkte_pro_antwort/).
+    Mit Punkten pro Antwort zählt jede Lücke für sich (punkte / Anzahl Lücken), ohne Abzug."""
     erlaubt = {"fib": {"text"}, "numerical": {"zahl"}, "inlinechoice": {"dropdown"},
                "gapmixed": {"text", "zahl", "dropdown"}}[typ]
     gross_klein = bool(f.get("gross_klein", False))
-    decls, bedingungen = [], []
+    teil = pro_antwort(f, typ)
+    text = pflicht(f, "text")
+    je_luecke = float(f.get("punkte", 1)) / max(len(LUECKE.findall(str(text))), 1)
+    decls, bedingungen, einzeln = [], [], []  # einzeln: Bewertung je Lücke (Punkte pro Antwort)
+    globale = [(ids("global-1-", 32), str(o)) for o in f.get("optionen") or []]
+    global_nr = [int(ids("", 10), 16) % 10**11 for _ in globale]
+    n_dropdown = 0
 
-    def luecke(roh: str, n: int) -> ET.Element:
+    def luecke(m: re.Match, n: int) -> ET.Element:
+        nonlocal n_dropdown
         resp = f"RESPONSE_{n}"
-        roh = roh.strip()
+        roh = m[1].strip()
         if roh.startswith("#"):
             art = "zahl"
         elif any(o.strip().startswith("*") for o in roh.split("|")):
@@ -506,16 +597,17 @@ def bau_luecken(f, ids, typ):
             art = "text"
         if art not in erlaubt:
             raise FehlerImFragensatz(f"«{f['titel']}»: Lücke {{{{{roh}}}}} ist {art}, in {typ} nicht erlaubt")
+        punkte_var = E("setOutcomeValue", {"identifier": f"SCORE_{resp}"}, E("mapResponse", {"identifier": resp}))
         if art == "text":
             varianten = [v.strip() for v in roh.split("|")]
+            # alles oder nichts: -1.0 aus dem Mapping heisst bei OpenOlat «eine gültige Variante getroffen»
             decls.append(E("responseDeclaration", {"identifier": resp, "cardinality": "single", "baseType": "string"},
                            E("correctResponse", None, value(varianten[0])),
-                           E("mapping", {"defaultValue": "0.0"}, *[
-                               E("mapEntry", {"mapKey": v, "mappedValue": "-1.0",
-                                              "caseSensitive": str(gross_klein).lower()}) for v in varianten])))
-            # OpenOlat-Konvention: -1.0 aus dem Mapping heisst «eine gültige Variante getroffen»
+                           mapping(((v, je_luecke if teil else -1) for v in varianten),
+                                   caseSensitive=str(gross_klein).lower())))
             bedingungen.append(E("match", None, E("baseValue", {"baseType": "float"}, text="-1.0"),
                                  E("mapResponse", {"identifier": resp})))
+            einzeln.append(punkte_var)
             return E("textEntryInteraction", {"class": "", "responseIdentifier": resp, "placeholderText": ""})
         if art == "zahl":
             # Dezimalkomma wie in Schweizer Unterlagen ({{#8,314±0,001}}) gilt wie ein Punkt
@@ -531,36 +623,61 @@ def bau_luecken(f, ids, typ):
                 tol = {"toleranceMode": "absolute", "tolerance": f"{toleranz} {toleranz}"}
             else:
                 tol = {"toleranceMode": "exact"}
-            bedingungen.append(E("equal", {**tol, "includeLowerBound": "true", "includeUpperBound": "true"},
-                                 E("correct", {"identifier": resp}), var(resp)))
+
+            def gleich():
+                return E("equal", {**tol, "includeLowerBound": "true", "includeUpperBound": "true"},
+                         E("correct", {"identifier": resp}), var(resp))
+            bedingungen.append(gleich())
+            einzeln.append(E("responseCondition", None, E("responseIf", None, gleich(),
+                             E("setOutcomeValue", {"identifier": f"SCORE_{resp}"},
+                               E("baseValue", {"baseType": "float"}, text=zahl(je_luecke))))))
             return E("textEntryInteraction", {"responseIdentifier": resp})
         optionen = [o.strip() for o in roh.split("|")]
         richtige = [o for o in optionen if o.startswith("*")]
         if len(richtige) != 1:
             raise FehlerImFragensatz(f"«{f['titel']}»: Dropdown {{{{{roh}}}}} braucht genau eine *-Option")
         oid = {o: ids("inline", 32) for o in optionen}
-        decls.append(E("responseDeclaration", {"identifier": resp, "cardinality": "single", "baseType": "identifier"},
-                       E("correctResponse", None, value(oid[richtige[0]]))))
+        wahl = [(oid[o], o.lstrip("*").strip()) for o in optionen]
+        wahl += [(f"{gid}-{nr + n_dropdown}", t) for (gid, t), nr in zip(globale, global_nr)]
+        n_dropdown += 1
+        decl = E("responseDeclaration", {"identifier": resp, "cardinality": "single", "baseType": "identifier"},
+                 E("correctResponse", None, value(oid[richtige[0]])))
+        if teil:
+            decl.append(mapping((i, je_luecke if i == oid[richtige[0]] else 0) for i, _ in wahl))
+        decls.append(decl)
         bedingungen.append(ist_richtig(resp))
+        einzeln.append(punkte_var)
         return E("inlineChoiceInteraction", {"responseIdentifier": resp, "shuffle": str(f.get("mischen", True)).lower()},
-                 *[E("inlineChoice", {"identifier": oid[o]}, text=o.lstrip("*").strip()) for o in optionen])
+                 *[E("inlineChoice", {"identifier": i}, text=t) for i, t in wahl])
 
     body = E("itemBody", {"class": FIB_KLASSE[typ]}, *stamm(f, ids))
     n = 0
-    for absatz in absaetze(pflicht(f, "text")):
-        el, pos = E("p"), 0
-        for m in LUECKE.finditer(absatz):
-            anhaengen(el, absatz[pos:m.start()])
-            n += 1
-            el.append(luecke(m[1], n))
-            pos = m.end()
-        anhaengen(el, absatz[pos:])
-        if len(el) and not el[-1].tail:
-            el[-1].tail = None
-        body.append(el)
+
+    def naechste(m):
+        nonlocal n
+        n += 1
+        return luecke(m, n)
+    for zeilen in zeilen_je_absatz(text):
+        body.append(absatz_mit_stellen(zeilen, LUECKE, naechste))
     if n == 0:
         raise FehlerImFragensatz(f"«{f['titel']}»: {typ} ohne {{{{Lücke}}}} im Text")
-    return decls, body, alles_oder_nichts(E("and", None, *bedingungen))
+    if globale and not n_dropdown:
+        raise FehlerImFragensatz(f"«{f['titel']}»: optionen gibt es nur mit {{{{*Dropdown}}}}-Lücken")
+    if teil:
+        # je Lücke SCORE_… und MINSCORE_…, die Summe ergibt SCORE (so schreibt es OpenOlat)
+        resps = [d.get("identifier") for d in decls]
+        decls += [E("outcomeDeclaration", {"identifier": k + r, "cardinality": "single", "baseType": "float"},
+                    E("defaultValue", None, value("0.0"))) for r in resps for k in ("SCORE_", "MINSCORE_")]
+        summe = E("setOutcomeValue", {"identifier": "SCORE"},
+                  E("sum", None, *[var(k + r) for r in resps for k in ("SCORE_", "MINSCORE_")]))
+        rp = E("responseProcessing", None, *einzeln, summe, *klammer_min_max())
+    else:
+        rp = alles_oder_nichts(E("and", None, *bedingungen))
+    if globale:
+        decls.append(E("templateDeclaration", {"identifier": "global-inline-choices-1", "cardinality": "multiple",
+                                               "baseType": "string"},
+                       E("defaultValue", None, *[E("value", {"id": gid}, text=t) for gid, t in globale])))
+    return decls, body, rp
 
 
 HOTTEXT = re.compile(r"\[\[(\*?)(.+?)\]\]")
@@ -568,27 +685,30 @@ HOTTEXT = re.compile(r"\[\[(\*?)(.+?)\]\]")
 
 def bau_hottext(f, ids, typ):
     """Im `text` markiert [[Wort]] anklickbare Stellen, [[*Wort]] die richtigen."""
-    inter = E("hottextInteraction", {"responseIdentifier": "RESPONSE_1", "maxChoices": "0"})
-    richtige = []
-    for absatz in absaetze(pflicht(f, "text")):
-        el, pos = E("p"), 0
-        for m in HOTTEXT.finditer(absatz):
-            anhaengen(el, absatz[pos:m.start()])
-            hid = ids("ht", 32)
-            if m[1]:
-                richtige.append(hid)
-            el.append(E("hottext", {"identifier": hid}, text=m[2]))
-            pos = m.end()
-        anhaengen(el, absatz[pos:])
-        if len(el) and not el[-1].tail:
-            el[-1].tail = None
-        inter.append(el)
+    teil = pro_antwort(f, typ)
+    ia = {"responseIdentifier": "RESPONSE_1", "maxChoices": "0"}
+    if teil:
+        ia["minChoices"] = "0"  # so im Export mit Punkten pro Antwort
+    inter = E("hottextInteraction", ia)
+    alle, richtige = [], []
+
+    def stelle(m):
+        hid = ids("ht", 32)
+        alle.append(hid)
+        if m[1]:
+            richtige.append(hid)
+        return E("hottext", {"identifier": hid}, text=m[2])
+    for zeilen in zeilen_je_absatz(pflicht(f, "text")):
+        inter.append(absatz_mit_stellen(zeilen, HOTTEXT, stelle))
     if not richtige:
         raise FehlerImFragensatz(f"«{f['titel']}»: hottext ohne [[*richtige]] Stelle")
     decl = E("responseDeclaration", {"identifier": "RESPONSE_1", "cardinality": "multiple", "baseType": "identifier"},
              E("correctResponse", None, *map(value, richtige)))
+    if teil:
+        plus, minus = teilpunkte(f, len(richtige))
+        decl.append(mapping((h, plus if h in richtige else minus) for h in alle))
     body = E("itemBody", None, *stamm(f, ids), inter)
-    return [decl], body, alles_oder_nichts(ist_richtig())
+    return [decl], body, summe_pro_antwort() if teil else alles_oder_nichts(ist_richtig())
 
 
 def bau_hotspot(f, ids, typ, bilder):
@@ -731,6 +851,7 @@ BAUER = {"sc": bau_choice, "mc": bau_choice, "kprim": bau_kprim, "match": bau_ma
          "hottext": bau_hottext, "order": bau_order}
 MIT_BILDERN = {"hotspot": bau_hotspot, "essay": bau_offen, "upload": bau_offen, "drawing": bau_offen}
 FEEDBACK_ZUERST = {"kprim", "essay", "upload", "drawing"}
+OHNE_FEEDBACK_DEKLARATION = {"mc", "match", "matchdraganddrop", "matchtruefalse"}
 
 
 MAX_BILDBREITE = 600  # px, Anzeige im Test; das Bild selbst bleibt in voller Auflösung im Paket
@@ -784,12 +905,18 @@ def baue_frage(f: dict, ids: Ids, bilder: Bilder):
         decls, body, rp = MIT_BILDERN[typ](f, ids, typ, bilder)
     else:
         decls, body, rp = BAUER[typ](f, ids, typ)
-    decls += outcomes(f.get("punkte", 1), feedback_zuerst=typ in FEEDBACK_ZUERST)
+    antworten = [d for d in decls if d.tag == q("responseDeclaration")]
+    weitere = [d for d in decls if d.tag != q("responseDeclaration")]  # nach SCORE…FEEDBACKBASIC
+    standard = outcomes(f.get("punkte", 1), feedback_zuerst=typ in FEEDBACK_ZUERST)
+    if typ in OHNE_FEEDBACK_DEKLARATION and pro_antwort(f, typ):
+        # so im Export: FEEDBACKBASIC wird gesetzt, aber nicht deklariert (Hottext deklariert es)
+        standard = [d for d in standard if d.get("identifier") != "FEEDBACKBASIC"]
     datei_id = ids(typ)
-    root = item(ids(typ), str(f["titel"]), decls, body, rp)
+    root = item(ids(typ), str(f["titel"]), antworten + standard + weitere, body, rp)
     if f.get("bilder"):
         mit_bildern(root, f, bilder)
-    interaktionen = [TYPEN[typ]]
+    # je Interaktion eine Zeile im Manifest, wie OpenOlat es bei mehreren Lücken schreibt
+    interaktionen = [el.tag.split("}")[1] for el in body.iter() if el.tag.endswith("Interaction")]
     for feld in ("hinweis", "musterloesung"):
         if f.get(feld) and typ != "essay":
             # bisher nur beim Freitext an OpenOlat-Exporten verifiziert (referenz/hinweis/, referenz/loesung/)
@@ -937,7 +1064,9 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
     for sek in sektionen(satz):
         items = []
         for f in pflicht(sek, "fragen"):
-            typ, datei, datei_id, root, punkte, interaktionen = baue_frage(dict(f), ids, bilder)
+            f = dict(f, _eigene=set(f))  # _eigene: was in der Frage selbst steht, nicht geerbt
+            f.setdefault("bewertung", sek.get("bewertung", satz.get("bewertung", "antwort")))
+            typ, datei, datei_id, root, punkte, interaktionen = baue_frage(f, ids, bilder)
             dateien[datei] = xml_bytes(root)
             zeilen = "\n".join(f"                    <ns2:interactionType>{i}</ns2:interactionType>"
                                 for i in interaktionen)

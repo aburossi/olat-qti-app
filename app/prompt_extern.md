@@ -21,6 +21,7 @@ Meine Fragen (oder mein Material) folgen am Ende dieser Nachricht.
 
 ```yaml
 titel: Werkstoffe – Lernkontrolle
+# bewertung: alles             # nur wenn die Vorlage Punkte ausschliesslich für ganz richtige Antworten gibt
 sektionen:                      # Teile des Tests; ohne Gliederung genau eine Sektion «Fragen»
   - titel: Teil A – Single Choice
     fragen:
@@ -36,7 +37,8 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 
       - typ: mc                 # mehrere richtige Antworten
         titel: A2 Leichtmetalle
-        punkte: 2
+        punkte: 2               # Summe: je richtige Antwort 1 P, falsche ziehen ab, nie unter 0
+        # abzug: 1              # nur wenn die Vorlage einen Abzug je falsche Antwort nennt (0 = kein Abzug)
         frage: Welche Metalle sind Leichtmetalle?
         antworten:
           - {text: "Aluminium", richtig: true}
@@ -102,8 +104,10 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 
       - typ: dropdown           # {{*richtig|falsch|falsch}} — * vor der richtigen Option
         titel: B3 Verformung
-        punkte: 1
-        text: Federt ein Werkstoff vollständig zurück, ist die Verformung {{*elastisch|plastisch}}.
+        punkte: 2
+        optionen: [spröde]      # optional: Optionen, die in JEDEM Dropdown dieser Frage zusätzlich stehen
+        text: |
+          Federt ein Werkstoff vollständig zurück, ist die Verformung {{*elastisch|plastisch}}.           Bleibt er verformt, ist sie {{*plastisch|elastisch}}.
 
       - typ: gemischt           # alle drei Lückenarten in einem Text
         titel: B4 Stahl
@@ -114,7 +118,7 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
         titel: B5 Leichtmetalle markieren
         punkte: 1
         frage: Markieren Sie alle Leichtmetalle.
-        text: Zur Auswahl stehen [[*Aluminium]], [[Kupfer]], [[*Titan]] und [[Blei]].
+        text: Zur Auswahl stehen [[*Aluminium]], [[Kupfer]], [[*Titan]] und [[Blei]].   # Stellen dürfen auch direkt aneinander stehen: [[*Alu]][[Blei]]
 
   - titel: Teil C – Offene Fragen
     fragen:
@@ -175,6 +179,14 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 - Erlaubte `typ`: sc, mc, kprim, richtigfalsch, matrix, dragdrop, reihenfolge, lueckentext,
   numerisch, dropdown, gemischt, hottext, freitext, upload, zeichnen.
 - `punkte` bei jeder Frage (Zahl, auch 0.5 möglich). `titel` kurz, mit Nummer aus der Vorlage.
+- `punkte` ist die Summe der Frage. OLAT verteilt sie auf die einzelnen richtigen Antworten, Zuordnungen,
+  Aussagen und Lücken (Teilpunkte; eine falsche Wahl kostet eine halbe richtige, nie unter 0). Nennt die
+  Vorlage einen anderen Abzug je falsche Antwort: `abzug: <Punkte>`. Gibt es laut Vorlage Punkte nur für
+  eine ganz richtige Antwort: `bewertung: alles` bei dieser Frage (oder ganz oben für den ganzen Test).
+  `gemischt`, `reihenfolge`, `sc` und `kprim` haben eigene Regeln — dort weder `bewertung` noch `abzug` setzen.
+- Dropdown (`dropdown`, `gemischt`): Optionen, die in **jedem** Dropdown der Frage stehen sollen, einmal als
+  `optionen: [A, B]` bei der Frage statt in jeder Lücke. Mehrzeiliger Lückentext als `|`-Block;
+  Zeilenumbruch in einer Lücken- oder Hottext-Zeile mit `\` am Zeilenende.
 - **Formatierung wie in Markdown**, in allen Texten — übernimm sie aus meiner Vorlage, wo sie dort steht:
   - `**fett**`, `*kursiv*` (echtes Sternchen: `\*`); in Antworten und Aussagen nur diese beiden.
   - Leerzeile = neuer Absatz. Zeilen ohne Leerzeile dazwischen werden zu Fliesstext verbunden —

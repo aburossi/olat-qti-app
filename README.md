@@ -41,7 +41,11 @@ Felder) ignoriert der Konverter; sie landen nie im Paket.
 
 `referenz/allefragen/` ist ein echter Export aus OpenOlat 21.0.2 mit allen 16
 Fragetypen (22.09.2026). Das Skript baut diesen Export nach; der Test vergleicht
-jede Frage nach Normalisierung der Identifikatoren — derzeit 18/18 identisch (16 Typen + Hinweis + Musterlösung).
+jede Frage nach Normalisierung der Identifikatoren — derzeit 35/35 identisch (16 Typen + Hinweis + Musterlösung
++ LaTeX + derselbe Satz mit «Punkte pro Antwort», `referenz/punkte_pro_antwort/`, 23.09.2026).
+Die Normalisierung ignoriert, was nur der OLAT-Editor zufällig hinterlässt: Leerraum wie im Browser,
+die Reihenfolge der Deklarationen je Lücke, die Kennung neu eingefügter Lücken, die Reihenfolge
+gemischter Dropdown-Optionen.
 OpenOlat-Eigenheiten, die bewusst übernommen sind: Klasse `match_krpim` (sic),
 das `-1.0`-Mapping bei Lücken, die Spalte «Unbeantwortet» bei Richtig/Falsch,
 `ooMetadata/questionType` im Manifest, Bilder nicht im Manifest aufgeführt.
@@ -51,10 +55,12 @@ das `-1.0`-Mapping bei Lücken, die Spalte «Unbeantwortet» bei Richtig/Falsch,
 ```yaml
 titel: LK Staatskunde 4PK25a
 mischen: false            # Fragen innerhalb der Sektion mischen
+bewertung: antwort        # Standard für alle Fragen (auch je Sektion), einzelne Fragen überschreiben
 fragen:                   # oder: sektionen: [{titel, mischen, fragen: [...]}]
   - typ: sc               # Typ, siehe Tabelle
     titel: Hauptstadt     # erscheint in OLAT als Fragetitel
-    punkte: 1             # Standard 1
+    punkte: 1             # Standard 1; Summe der Frage, auch bei Punkten pro Antwort
+    bewertung: antwort    # Standard; «alles» = volle Punkte nur, wenn alles richtig ist
     frage: Was ist die Hauptstadt der Schweiz?   # Leerzeile = neuer Absatz
     antworten:
       - {text: Bern, richtig: true}
@@ -69,14 +75,36 @@ fragen:                   # oder: sektionen: [{titel, mischen, fragen: [...]}]
 | `matchtruefalse` | richtigfalsch | `aussagen` mit `richtig` |
 | `fib` | lueckentext | `text` mit `{{Bern\|Berne}}` — jede Variante gilt; `gross_klein: true` |
 | `numerical` | numerisch | `text` mit `{{#100}}` oder `{{#100±0.5}}` |
-| `inlinechoice` | dropdown | `text` mit `{{*Sonne\|Mond}}` — `*` = richtig |
+| `inlinechoice` | dropdown | `text` mit `{{*Sonne\|Mond}}` — `*` = richtig; `optionen: [Mars, Venus]` hängt Optionen an jedes Dropdown |
 | `gapmixed` | gemischt | alle drei Lückenarten gemischt |
-| `hottext` | | `text` mit `[[Wort]]`, richtige als `[[*Wort]]` |
+| `hottext` | | `text` mit `[[Wort]]`, richtige als `[[*Wort]]`; Stellen dürfen direkt aneinander stehen |
 | `hotspot` | | `bild`, `bereiche: [{form: circle\|rect\|poly, koord: "x,y,r", richtig}]`, `breite`/`hoehe` (bei PNG automatisch) |
 | `order` | reihenfolge | `elemente` in richtiger Reihenfolge |
 | `essay` | freitext | `frage`, optional `zeilen` |
 | `upload` | | `frage` |
 | `drawing` | zeichnen | `frage`, optional `bild` (sonst weisse Fläche 500×350) |
+
+**Bewertung — Punkte pro Antwort (Standard seit 23.09.2026).** Nachgebaut aus
+`referenz/punkte_pro_antwort/` (OpenOlat → Bewertung → «Punkte pro Antwort»). `punkte` bleibt die Summe
+der Frage und wird gleichmässig verteilt:
+
+| Typ | richtige Antwort | falsche Antwort |
+|---|---|---|
+| mc, hottext | `punkte` / Anzahl richtige | −½ davon |
+| matrix, dragdrop | `punkte` / Anzahl richtiger Zuordnungen | −½ davon (jede falsche Zelle) |
+| richtigfalsch | `punkte` / Anzahl Aussagen | −½ davon; unbeantwortet 0 |
+| lueckentext, numerisch, dropdown | `punkte` / Anzahl Lücken, je Lücke für sich | 0 |
+
+`abzug: 0.5` setzt die Punkte je falsche Antwort fest (0 = kein Abzug). Die Frage fällt nie unter 0.
+Beispiel mc mit 2 richtigen und 1 falschen, 1 Punkt: eine richtige gewählt = 0.5, alles angekreuzt = 0.75.
+`bewertung: alles` schaltet zurück auf OpenOlats Standard (volle Punkte nur bei ganz richtig).
+sc, kprim (eigene Halbpunkt-Regel), freitext/upload/zeichnen sind davon nicht betroffen. **gemischt,
+hotspot, reihenfolge bleiben bei alles oder nichts**, bis ein Export zeigt, wie OpenOlat sie pro Antwort schreibt;
+`bewertung: antwort` direkt an einer solchen Frage bricht den Build ab.
+
+**Globale Dropdown-Optionen:** `optionen: [Mars, Venus]` bei dropdown/gemischt — OpenOlats «globale
+Antworten»: die Optionen stehen zusätzlich in jedem Dropdown der Frage (`templateDeclaration`).
+Zeilenumbruch in Lückentext und Hottext wie überall: Zeile mit `\` beenden.
 
 **Medien, bei jedem Typ:** `medien: [URL, …]` oder `[{url, breite, hoehe}]` (Std. 640×480).
 YouTube-, nanoo.tv- (in OLAT getestet 22.09.2026) und mp3-Links erscheinen nach dem Fragetext im OLAT-Player — dasselbe
@@ -144,5 +172,5 @@ funktioniert.** Abgedeckt:
 - Matrix mit ungenutzter Spalte, Hottext und Hotspot mit mehreren richtigen (T5–T7)
 - mehrere Sektionen, Sektion gemischt; `expectedLines`; Zeichnen ohne Bild (T8–T9)
 
-Nicht unterstützt: Feedback-Texte ausser Hinweis und Musterlösung bei Freitext, Teilpunkte pro Antwort, Formatierung im Fragetext,
+Nicht unterstützt: Feedback-Texte ausser Hinweis und Musterlösung bei Freitext, Punkte pro Antwort bei gemischt/hotspot/reihenfolge,
 Fragenpools. Kommt, wenn ein Export zeigt, wie OpenOlat es schreibt.

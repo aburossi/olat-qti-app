@@ -13,6 +13,8 @@ import pymupdf
 
 TYPEN = ["sc", "mc", "kprim", "match", "matchdraganddrop", "matchtruefalse", "fib", "numerical",
          "inlinechoice", "gapmixed", "hottext", "order", "essay", "upload"]
+# Typen mit «Punkte pro Antwort» — gleiche Liste wie olatqti.PRO_ANTWORT
+PRO_ANTWORT = {"mc", "match", "matchdraganddrop", "matchtruefalse", "hottext", "fib", "numerical", "inlinechoice"}
 
 
 def _nullbar(schema: dict) -> dict:
@@ -30,6 +32,8 @@ FRAGE = {
         "typ": {"type": "string", "enum": TYPEN},
         "titel": {"type": "string"},
         "punkte": {"type": "number"},
+        "bewertung": {"type": ["string", "null"]},  # "alles" oder null
+        "abzug": {"type": ["number", "null"]},
         "frage": {"type": ["string", "null"]},
         "antworten": _nullbar({"type": "array", "items": _WAHR}),
         "aussagen": _nullbar({"type": "array", "items": _WAHR}),
@@ -76,7 +80,11 @@ GRUNDREGELN
 - Nichts dazuerfinden: keine zusätzlichen Distraktoren, keine Hinweise, keine Lösungen, die nicht im PDF stehen.
 - Fehlt die Lösung einer geschlossenen Frage im PDF oder ist etwas unklar: trotzdem übertragen, deine
   beste Lösung einsetzen und im Feld `unsicher` in einem Satz sagen, was fehlt. Sonst `unsicher` = null.
-- Punkte aus dem PDF übernehmen; stehen keine da: 1 (Freitext: 2).
+- Punkte aus dem PDF übernehmen; stehen keine da: 1 (Freitext: 2). `punkte` ist die Summe der Frage — OLAT
+  verteilt sie auf die einzelnen richtigen Antworten, Zuordnungen, Aussagen und Lücken (Teilpunkte).
+- `bewertung` = "alles" nur, wenn das PDF sagt, dass es Punkte ausschliesslich für eine vollständig richtige
+  Antwort gibt; sonst null. `abzug` = Punkte, die das PDF je falsche Antwort ausdrücklich abzieht
+  (z. B. «−0,5 P pro falsches Kreuz» → 0.5; «kein Abzug» → 0); sonst null.
 - `titel`: kurzer Fragetitel, 2–6 Wörter, mit Fragenummer aus dem PDF, z. B. «3 Dichte von Aluminium».
 - `quelle`: Seite und Nummer im PDF, z. B. «S. 2, Aufgabe 3».
 - Fragen, bei denen man IM Bild klicken, zeichnen oder beschriften muss: nicht übertragen, sondern in
@@ -630,6 +638,11 @@ def _frage(q: dict, erweitert: bool = False) -> dict:
         hinweis = f"PDF nennt «{q['typ_im_pdf']}», übertragen als {typ} — Typ bitte prüfen"
         q["unsicher"] = f"{q['unsicher']} · {hinweis}" if q.get("unsicher") else hinweis
     f = {"typ": typ, "titel": q["titel"], "punkte": q["punkte"]}
+    if typ in PRO_ANTWORT:  # andere Typen haben eigene Regeln, olatqti lehnt die Felder dort ab
+        if q.get("bewertung") == "alles":
+            f["bewertung"] = "alles"
+        elif q.get("abzug") is not None and typ not in ("fib", "numerical", "inlinechoice"):
+            f["abzug"] = q["abzug"]
     if q.get("frage"):
         f["frage"] = q["frage"]
     if typ in ("sc", "mc"):

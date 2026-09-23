@@ -1,7 +1,8 @@
-# Nachbau von referenz/ALLEFRAGEN.zip (OpenOlat-Export, 22.09.2026).
-# tests/test_referenz.py baut diesen Satz und vergleicht jede Frage mit dem Original.
+# Nachbau von referenz/ALLEFRAGEN_PunktePerAntwort.zip (OpenOlat-Export, 23.09.2026):
+# derselbe Satz wie allefragen.yaml, aber mit «Punkte pro Antwort», globalen Dropdown-Optionen,
+# mehreren Lücken und mehreren Hottext-Stellen. tests/test_referenz.py vergleicht jede Frage.
+# bewertung fehlt absichtlich: «antwort» ist der Standard.
 titel: ALLE-FRAGEN
-bewertung: alles  # Export mit OpenOlats Standard: volle Punkte nur bei ganz richtig
 fragen:
   - typ: sc
     titel: Single Choice
@@ -20,6 +21,7 @@ fragen:
 
   - typ: kprim
     titel: Kprim
+    punkte: 3
     frage: Kreuzen Sie an, ob die folgenden Aussagen zur Schweiz richtig oder falsch sind.
     aussagen:
       - {text: Bern ist die Hauptstadt der Schweiz., richtig: true}
@@ -50,23 +52,44 @@ fragen:
 
   - typ: fib
     titel: Lückentext
-    text: Die Hauptstadt der Schweiz heisst {{Bern}}
+    punkte: 2
+    text: |
+      Die Hauptstadt der Schweiz heisst {{Bern}}. \
+      Berlin ist die {{deutsche}} Hauptstadt
 
   - typ: numerical
     titel: Lückentext numerisch
-    text: Wasser kocht bei {{#100}} Grad Celsius (bei Normaldruck).
+    punkte: 2
+    text: |
+      Wasser kocht bei {{#100}} Grad Celsius (bei Normaldruck).
+
+      Gefrierpunkt liegt bei {{#0}} Grad Celsius
 
   - typ: inlinechoice
     titel: Lückentext mit Dropdown
-    text: Die Erde dreht sich um die {{*Sonne|Mond}}.
+    punkte: 2
+    optionen: [Mars, Venus]
+    text: |
+      Die Erde dreht sich um die {{*Sonne|Mond}}.
+
+      Der {{*Mond}}dreht sich um die Erde.
 
   - typ: gapmixed
     titel: Lückentext gemischt
-    text: Der europaeische Sitz der UNO befindet sich in {{Genf}}.
+    optionen: [Multiplikation, Substraktion]
+    text: |
+      Der europaeische Sitz der UNO befindet sich in {{Genf}}
+
+      1+1 = 2
+
+      1+1 ist eine {{*Addition}}
 
   - typ: hottext
     titel: Hottext
-    text: Der Eiffelturm steht in [[*Paris]].
+    text: |
+      Der Eiffelturm steht in [[*Paris]][[Bern]][[London]]
+
+      Der Big Ben steht in [[ Paris ]] [[Bern]] [[*London]]
 
   - typ: hotspot
     titel: Hotspot

@@ -6,6 +6,7 @@ Alles andere — Elemente, Attribute, Texte, Bewertungslogik — muss gleich sei
 
     python tests/test_referenz.py
 """
+import re
 import sys
 import tempfile
 import zipfile
@@ -21,10 +22,102 @@ NS = "{http://www.imsglobal.org/xsd/imsqti_v2p1}"
 AUSWAHL = {NS + t for t in olatqti.AUSWAHL}
 
 
+LEER = re.compile(r"\s+")
+BLOCK = {NS + t for t in ("p", "li", "td", "th", "h3", "h4", "div", "hottextInteraction")}
+
+
+def weissraum(root) -> None:
+    """Leerraum im itemBody so, wie der Browser ihn zeigt: Folgen = ein Leerzeichen, am Blockende und
+    vor <br/> unsichtbar, leere Absätze weg. Der OLAT-Editor hinterlässt dort beliebige Reste."""
+    body = root.find(NS + "itemBody")
+    if body is None:
+        return
+    for el in body.iter():
+        if el.text:
+            el.text = LEER.sub(" ", el.text)
+        if el.tail:
+            el.tail = LEER.sub(" ", el.tail)
+    for el in list(body.iter()):
+        if el.tag == NS + "br":
+            vor = el.getprevious()
+            if vor is not None:
+                vor.tail = (vor.tail or "").rstrip() or None
+            else:
+                el.getparent().text = (el.getparent().text or "").rstrip() or None
+        if el.tag in BLOCK:
+            if len(el):
+                el[-1].tail = (el[-1].tail or "").rstrip() or None
+            else:
+                el.text = (el.text or "").rstrip() or None
+    for el in list(body.iter(NS + "p")):
+        if not len(el) and not el.text:
+            el.getparent().remove(el)
+    for el in body.iter(NS + "textEntryInteraction"):
+        if el.get("placeholderText") == "":  # mal geschrieben, mal nicht — gleichbedeutend
+            del el.attrib["placeholderText"]
+    for ia in body.iter(NS + "inlineChoiceInteraction"):
+        if ia.get("shuffle") == "true":  # gemischt: die Reihenfolge der Optionen zählt nicht
+            ia[:] = sorted(ia, key=lambda e: e.text or "")
+
+
+def luecken_ordnen(root) -> None:
+    """Antwort-Kennungen nach Reihenfolge im itemBody umbenennen (OpenOlat nennt eine neu eingefügte
+    Lücke mal RESPONSE_2, mal inline…) und die Deklarationen und Teilbewertungen je Lücke danach
+    sortieren — OpenOlat schreibt sie in Bearbeitungsreihenfolge."""
+    body = root.find(NS + "itemBody")
+    name = {}
+    for el in body.iter():
+        if el.get("responseIdentifier"):
+            name.setdefault(el.get("responseIdentifier"), f"R{len(name) + 1:03d}")
+
+    def neu(s):
+        if s in name:
+            return name[s]
+        for k in ("SCORE_", "MINSCORE_"):
+            if s.startswith(k) and s[len(k):] in name:
+                return k + name[s[len(k):]]
+        return s
+    for el in root.iter():
+        for a in ("identifier", "responseIdentifier"):
+            if el.get(a):
+                el.set(a, neu(el.get(a)))
+
+    def schluessel(el):
+        ident = el.get("identifier") or ""
+        if el.tag == NS + "responseDeclaration":
+            return ident
+        if el.tag == NS + "responseCondition":
+            ziel = el.find(f"{NS}responseIf/{NS}setOutcomeValue")
+            ident = ziel.get("identifier") if ziel is not None else ""
+        if el.tag in (NS + "outcomeDeclaration", NS + "variable", NS + "setOutcomeValue", NS + "responseCondition"):
+            for k in ("SCORE_", "MINSCORE_"):
+                if ident.startswith(k):
+                    return ident[len(k):]
+        return None
+    for eltern in list(root.iter()):
+        kinder, lauf = list(eltern), []
+        neu_ = list(kinder)
+        for i in range(len(kinder) + 1):
+            if i < len(kinder) and schluessel(kinder[i]) is not None:
+                lauf.append(i)
+                continue
+            if len(lauf) > 1:
+                sortiert = sorted((kinder[j] for j in lauf), key=schluessel)  # stabil: SCORE_ vor MINSCORE_
+                for j, k in zip(lauf, sortiert):
+                    neu_[j] = k
+            lauf = []
+        if neu_ != kinder:
+            eltern[:] = neu_
+
+
 def normalisiert(daten: bytes) -> str:
     root = etree.fromstring(daten)
     for a in ("identifier", "toolName", "toolVersion"):
         root.attrib.pop(a, None)
+    weissraum(root)
+    luecken_ordnen(root)
+    for i, v in enumerate(v for v in root.iter(NS + "value") if v.get("id")):
+        v.set("id", f"G{i}")  # globale Dropdown-Optionen (templateDeclaration)
     nummer = {}
     for el in root.iter():
         if el.tag in AUSWAHL:
@@ -70,7 +163,8 @@ def items_nach_titel(zip_oder_ordner) -> dict[str, bytes]:
 
 
 # (Fragensatz in beispiele/, Ordner in referenz/ mit den OpenOlat-Originalen)
-PAARE = [("allefragen.yaml", "allefragen"), ("hinweis.yaml", "hinweis"), ("loesung.yaml", "loesung"), ("latex.yaml", "latex")]
+PAARE = [("allefragen.yaml", "allefragen"), ("hinweis.yaml", "hinweis"), ("loesung.yaml", "loesung"), ("latex.yaml", "latex"),
+         ("punkte_pro_antwort.yaml", "punkte_pro_antwort")]
 
 
 def main() -> int:
