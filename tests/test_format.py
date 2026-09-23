@@ -132,6 +132,26 @@ def main() -> int:
         fehler.append("_ohne_doppel entfernt einen Titel, der in der Quelle wiederkehrt")
     if umwandeln._ohne_doppel("Kurz.\n\nKurz.") != "Kurz.\n\nKurz.":
         fehler.append("_ohne_doppel entfernt kurze Absätze")
+    # Typangabe im PDF, zerrissener Lückensatz, <rot>-Marker
+    leer = {k: None for k in umwandeln.FRAGE["properties"]}
+    f = umwandeln._frage({**leer, "typ": "inlinechoice", "titel": "7 Probezeit", "punkte": 1,
+                          "frage": "Wählen Sie.\n\nDie Probezeit dauert höchstens", "text": "{{*3|1|6}} Monate.",
+                          "typ_im_pdf": "Dropdown"})
+    if f.get("frage") != "Wählen Sie." or f["text"] != "Die Probezeit dauert höchstens {{*3|1|6}} Monate." \
+            or f.get("unsicher"):
+        fehler.append(f"Lückensatz nicht zusammengeführt: {f}")
+    f = umwandeln._frage({**leer, "typ": "kprim", "titel": "3", "punkte": 1, "frage": "<rot>x</rot>",
+                          "aussagen": [{"text": str(i), "richtig": True} for i in range(4)], "typ_im_pdf": "Richtig/Falsch"})
+    if "Richtig/Falsch" not in (f.get("unsicher") or "") or "<rot>" in f["frage"]:
+        fehler.append(f"Typabweichung nicht markiert oder <rot> übrig: {f}")
+    for angabe, soll in [("Multiple Choice", {"mc"}), ("gemischter Lückentext", {"gapmixed"}), ("Zahl", {"numerical"}),
+                         ("Drag and Drop", {"matchdraganddrop"}), ("irgendwas", None), (None, None)]:
+        if umwandeln.typ_aus_angabe(angabe) != soll:
+            fehler.append(f"typ_aus_angabe({angabe!r}) = {umwandeln.typ_aus_angabe(angabe)}")
+    rot = umwandeln._markiert([{"text": "Lösung", "flags": 0, "font": "Arial", "color": 0xd0021b},
+                               {"text": " normal", "flags": 0, "font": "Arial", "color": 0x1a1a1a}])
+    if rot != "<rot>Lösung</rot> normal":
+        fehler.append(f"_markiert rot: {rot!r}")
     pdf_test(fehler)
     referenz_test(fehler)
     demo_test(fehler)

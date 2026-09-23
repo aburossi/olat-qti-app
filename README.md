@@ -90,6 +90,13 @@ Aufbau nach QTI-Standard, **in OLAT importiert und angezeigt am 22.09.2026** (`b
 Die App holt Bilder aus dem PDF (Logos auf mehr als der Hälfte der Seiten und Bilder unter 80 px fallen
 weg), setzt an ihrer Stelle «[Bild: s2_bild1.jpg]» in den Text, und das Modell ordnet sie den Fragen zu.
 
+**Fragetyp aus dem PDF:** Steht der Typ in der Überschrift einer Aufgabe («Aufgabe 3 – Lückentext»), gilt er
+vor der Form. Das Modell meldet die Angabe in `typ_im_pdf`; weicht der gewählte Typ ab, markiert
+`umwandeln.typ_aus_angabe()` die Frage mit ⚠. Roter Text (Lösungsfarbe) kommt als `<rot>…</rot>` ans
+Modell und wird danach entfernt. Probe: `beispiele/pdf_typangaben.py` (14 Aufgaben mit Fallen, `ERWARTET`),
+23.09.2026 mit gpt-5.6-luna: 13, 13, 13, 14, 14, 14 von 14 über sechs Läufe (die letzten zwei mit dem
+nachgeschärften Prompt).
+
 **Formatierung (Markdown-Teilmenge)** in allen Texten (`frage`, Antworten, Aussagen, `text`, `hinweis`,
 `musterloesung`): `**fett**` → `<strong>`, `*kursiv*` → `<em>` (`\*` = echter Stern); je Zeile eines Absatzes
 `### Titel` → `<h3>` (`####` → `<h4>`), `- Punkt` → `<ul>`, `1. Punkt` → `<ol>`, `| a | b |` (mit `|---|`

@@ -166,6 +166,12 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 
 ## Regeln zum Format
 
+- **Nennt meine Vorlage den Fragetyp** («Aufgabe 3 – Lückentext», «Multiple Choice:», «(Kprim)»), gilt
+  dieser Typ, auch wenn die Form etwas anderes nahelegt: Single Choice → sc, Multiple Choice → mc,
+  Kprim → kprim, Richtig/Falsch → richtigfalsch, Matrix/Zuordnung → matrix, Drag and Drop → dragdrop,
+  Reihenfolge → reihenfolge, Lückentext → lueckentext, Zahl → numerisch, Dropdown → dropdown,
+  Hottext → hottext, Freitext/offene Frage → freitext, Upload → upload. Die Typangabe selbst gehört
+  nicht in `titel` oder `frage`. Passt sie nicht zum Inhalt: trotzdem diesen Typ, und in `unsicher:` sagen, was nicht passt.
 - Erlaubte `typ`: sc, mc, kprim, richtigfalsch, matrix, dragdrop, reihenfolge, lueckentext,
   numerisch, dropdown, gemischt, hottext, freitext, upload, zeichnen.
 - `punkte` bei jeder Frage (Zahl, auch 0.5 möglich). `titel` kurz, mit Nummer aus der Vorlage.

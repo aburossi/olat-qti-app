@@ -49,6 +49,7 @@ FRAGE = {
         "musterloesung": {"type": ["string", "null"]},
         "quelle": {"type": ["string", "null"]},
         "unsicher": {"type": ["string", "null"]},
+        "typ_im_pdf": {"type": ["string", "null"]},
     },
 }
 FRAGE["required"] = list(FRAGE["properties"])
@@ -82,6 +83,9 @@ GRUNDREGELN
   `uebersprungen` mit Nummer und Grund aufführen. Fragen, zu denen nur ein Bild gezeigt wird (Diagramm lesen,
   Schema deuten), werden normal übertragen — steht das Bild als «[Bild: …]» im Text, siehe BILDER IM TEXT;
   fehlt es, in `unsicher` vermerken.
+- Text zwischen <rot> und </rot> ist im PDF rot gedruckt — in Lösungsblättern ist das die Lösung: die
+  angekreuzte Option, das eingesetzte Wort in einer Lücke, die markierte Stelle, die Musterantwort. Roter
+  Text ist darum meist nicht Teil der Aufgabe für Lernende. Die Marker <rot> selbst nie übernehmen.
 - Test-`titel`: der Titel des PDFs.
 - Nicht benutzte Felder einer Frage: null.
 
@@ -97,12 +101,30 @@ SEKTIONEN
   Angaben —, gehört in `frage` (als eigener Absatz). Nichts davon weglassen, auch nicht, wenn es im
   Text zerstückelt über mehrere Zeilen steht (gestapelte Brüche: Zähler und Nenner auf eigenen Zeilen).
 
-FRAGETYP WÄHLEN — nach der Form im PDF
+FRAGETYP IM PDF GENANNT — geht allem Folgenden vor
+- Nennt das PDF den Fragetyp als Bezeichnung — in der Überschrift der Aufgabe («Aufgabe 3 – Lückentext»,
+  «A2 (Kprim)») oder ausdrücklich («Fragetyp: Multiple Choice») —, gilt dieser Typ, auch wenn die Form
+  etwas anderes nahelegt. Eine Arbeitsanweisung wie «Richtig oder falsch?», «Kreuzen Sie an» oder
+  «Ergänzen Sie» ist KEINE Typangabe; dann gilt FRAGETYP WÄHLEN.
+    Single Choice, Einfachauswahl → sc · Multiple Choice, Mehrfachauswahl → mc · Kprim → kprim ·
+    Richtig/Falsch, Wahr/Falsch → matchtruefalse (auch bei genau 4 Aussagen) · Matrix, Zuordnung (Tabelle
+    zum Ankreuzen) → match · Drag and Drop, Zuordnen durch Ziehen → matchdraganddrop · Reihenfolge → order ·
+    Lückentext → fib · Zahl, Numerisch, Rechenaufgabe mit Lücke → numerical · Dropdown, Auswahllücke →
+    inlinechoice · gemischter Lückentext → gapmixed · Hottext, Wörter markieren/anklicken → hottext ·
+    Freitext, offene Frage, Essay → essay · Upload, Datei abgeben → upload ·
+    Hotspot, Zeichnen → nicht übertragen, in `uebersprungen`.
+- `typ_im_pdf` = die Typangabe genau so, wie sie im PDF steht (z. B. «Lückentext»); ohne Angabe null.
+- Die Typangabe gehört nicht in `frage` und nicht in `titel` («Aufgabe 3 – Lückentext: Dichte» → titel
+  «3 Dichte»).
+- Passt der genannte Typ nicht zum Inhalt (z. B. «Single Choice», aber zwei Lösungen markiert): den genannten
+  Typ trotzdem nehmen, so gut es geht, und in `unsicher` in einem Satz sagen, was nicht passt.
+
+FRAGETYP WÄHLEN — nach der Form im PDF, wenn kein Typ genannt ist
 - sc: Auswahl, genau eine richtig → `antworten` [{text, richtig}]
 - mc: Auswahl, mehrere richtig → `antworten`
 - kprim: genau 4 Aussagen, die im PDF je einzeln als richtig ODER falsch zu beurteilen sind (Spalten
   «richtig/falsch», «R/F», «trifft zu») → `aussagen` [{text, richtig}]. Bei genau 4 solchen Aussagen immer kprim,
-  nie matchtruefalse. Eine Auswahlfrage mit Ankreuzkästchen A–D («Welche … sind korrekt?») bleibt sc/mc,
+  nie matchtruefalse — ausser die Überschrift nennt «Richtig/Falsch» als Typ (siehe oben). Eine Auswahlfrage mit Ankreuzkästchen A–D («Welche … sind korrekt?») bleibt sc/mc,
   auch wenn sie 4 Optionen hat.
 - matchtruefalse: richtig/falsch-Aussagen, deren Anzahl NICHT 4 ist → `aussagen`
 - match: Zuordnung in einer Tabelle/Matrix → `zeilen`, `spalten`, `zuordnung` [{zeile, spalte}]
@@ -116,7 +138,8 @@ FRAGETYP WÄHLEN — nach der Form im PDF
 - essay: offene Frage → `frage`, `musterloesung` = Lösung aus dem PDF, `antwortzeilen` = Linienzahl im PDF oder
   geschätzt; `hinweis` nur, wenn das PDF einen Tipp für Lernende enthält
 - upload: Abgabe einer Datei → `frage`
-- Lückentexte → `text` mit Lücken-Markup, Einleitung in `frage`:
+- Lückentexte → `text` mit Lücken-Markup, Einleitung in `frage`. Der GANZE Satz mit der Lücke gehört in
+  `text` — nie den Satzanfang in `frage` und nur den Rest in `text`:
     fib           Texteingabe: {{Lösung|Variante2}} — alle im PDF genannten Varianten
     numerical     Zahl: {{#26}} oder mit Toleranz {{#200±2}} — Dezimalkomma oder -punkt, aber nie Leerzeichen
                   oder Tausender-Trennzeichen in der Lücke ({{#101300±100}}, nicht {{#101 300}})
@@ -309,23 +332,33 @@ def _stil(sp: dict) -> tuple[bool, bool]:
             bool(sp["flags"] & 2 or KURSIV.search(sp["font"])))
 
 
+def _rot(farbe: int) -> bool:
+    """Rot wie in Lösungsblättern (#c00000, #d0021b): dort steht die Lösung."""
+    r, g, b = farbe >> 16 & 255, farbe >> 8 & 255, farbe & 255
+    return r >= 150 and g <= 90 and b <= 90
+
+
 def _markiert(spans: list[dict]) -> str:
-    """Spans einer Zeile -> Text mit **fett** und *kursiv*; gleiche Stile werden zusammengefasst."""
+    """Spans einer Zeile -> Text mit **fett**, *kursiv* und <rot>…</rot>; gleiche Stile werden zusammengefasst."""
     gruppen: list[list] = []
     for sp in spans:
-        stil = _stil(sp) if sp["text"].strip() else None
+        stil = (*_stil(sp), _rot(sp.get("color", 0))) if sp["text"].strip() else None
         if gruppen and (stil is None or gruppen[-1][0] == stil):
             gruppen[-1][1] += sp["text"]
         else:
             gruppen.append([stil, sp["text"]])
     out = ""
     for stil, t in gruppen:
-        m = {(True, True): "***", (True, False): "**", (False, True): "*"}.get(stil or (False, False), "")
+        fett, kursiv, rot = stil or (False, False, False)
+        m = {(True, True): "***", (True, False): "**", (False, True): "*"}.get((fett, kursiv), "")
         kern = t.strip()
-        if not m or not kern:
+        if not kern or not (m or rot):
             out += t
             continue
-        out += t[:len(t) - len(t.lstrip())] + m + kern + m + t[len(t.rstrip()):]
+        kern = m + kern + m
+        if rot:
+            kern = f"<rot>{kern}</rot>"
+        out += t[:len(t) - len(t.lstrip())] + kern + t[len(t.rstrip()):]
     return out
 
 
@@ -535,8 +568,41 @@ def _ohne_doppel(text: str | None) -> str | None:
     return "\n\n".join(a for i, a in enumerate(absaetze) if i not in weg)
 
 
+# Typangabe im PDF -> erlaubte Typen; Reihenfolge zählt («gemischter Lückentext» vor «Lückentext»)
+TYP_WOERTER = [
+    (r"gemischt", {"gapmixed"}), (r"single|einfachauswahl|einfach-auswahl", {"sc"}),
+    (r"multiple|mehrfachauswahl|mehrfach-auswahl", {"mc"}), (r"kprim|k-prim", {"kprim"}),
+    (r"(richtig|wahr)\s*(/|oder|-)\s*falsch", {"matchtruefalse"}),
+    (r"drag|ziehen", {"matchdraganddrop"}), (r"matrix|zuordn", {"match", "matchdraganddrop"}),
+    (r"reihenfolge", {"order"}), (r"dropdown|auswahll[üu]cke", {"inlinechoice"}),
+    (r"numerisch|zahl", {"numerical"}), (r"l[üu]cke", {"fib", "numerical", "inlinechoice", "gapmixed"}),
+    (r"hottext|markier|anklick", {"hottext"}), (r"freitext|offene|essay", {"essay"}),
+    (r"upload|hochlad|datei", {"upload"}),
+]
+
+
+def typ_aus_angabe(angabe: str | None) -> set[str] | None:
+    """Erlaubte Typen zu einer Typangabe aus dem PDF; None, wenn die Angabe unbekannt ist."""
+    a = (angabe or "").lower()
+    return next((typen for muster, typen in TYP_WOERTER if re.search(muster, a)), None) if a else None
+
+
+ROT = re.compile(r"</?rot>")
+
+
+def _ohne_rot(o):
+    """<rot>-Marker aus der Extraktion, falls das Modell sie mitkopiert."""
+    if isinstance(o, str):
+        return ROT.sub("", o)
+    if isinstance(o, list):
+        return [_ohne_rot(x) for x in o]
+    if isinstance(o, dict):
+        return {k: _ohne_rot(v) for k, v in o.items()}
+    return o
+
+
 def _frage(q: dict, erweitert: bool = False) -> dict:
-    q = _latex_reparieren(q)
+    q = _latex_reparieren(_ohne_rot(q))
     q["frage"] = _ohne_doppel(q.get("frage"))
     if erweitert:
         q["frage"] = _zwischentitel(q.get("frage"))
@@ -552,6 +618,17 @@ def _frage(q: dict, erweitert: bool = False) -> dict:
         hinweis = f"{typ} ohne Lückentext geliefert — als Freitext übernommen, Typ bitte prüfen"
         q = {**q, "typ": "essay", "unsicher": f"{q['unsicher']} · {hinweis}" if q.get("unsicher") else hinweis}
         typ = "essay"
+    if typ in ("fib", "numerical", "inlinechoice", "gapmixed") and q.get("frage"):
+        # luna trennte «Die Probezeit dauert höchstens» (frage) von «{{*3|1|6}} Monate.» (text), 23.09.2026
+        absaetze = re.split(r"\n\s*\n", q["frage"].strip())
+        rest = absaetze[-1].strip()
+        if len(absaetze) > 1 and not rest.endswith((".", ":", "?", "!", "»", ")")) \
+                and re.match(r"\{\{|[a-zäöü,;]", q["text"].strip()):
+            q = {**q, "frage": "\n\n".join(absaetze[:-1]), "text": f"{rest} {q['text'].strip()}"}
+    erwartet = typ_aus_angabe(q.get("typ_im_pdf"))
+    if erwartet and typ not in erwartet:
+        hinweis = f"PDF nennt «{q['typ_im_pdf']}», übertragen als {typ} — Typ bitte prüfen"
+        q["unsicher"] = f"{q['unsicher']} · {hinweis}" if q.get("unsicher") else hinweis
     f = {"typ": typ, "titel": q["titel"], "punkte": q["punkte"]}
     if q.get("frage"):
         f["frage"] = q["frage"]
