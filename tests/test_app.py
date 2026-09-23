@@ -37,6 +37,11 @@ def main() -> int:
         fehler.append(f"Tabs: {tabs}")
     if at.radio:
         fehler.append("Modellwahl sollte es nicht mehr geben (nur noch gpt-5.6-luna)")
+    if not any("So formatieren Sie Ihr PDF" in e.label for e in at.expander) \
+            or not any("Fragetyp in die Überschrift" in m.value for m in at.markdown):
+        fehler.append("Tipps zum PDF fehlen")
+    if not (APP.parent / "beispiele" / "Vorlage_Fragetypen_mit_Loesungen.pdf").is_file():
+        fehler.append("Vorlage-PDF fehlt in beispiele/")
     seite = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
     for stichwort in ("Autorenbereich", "Importieren", "Zip-Paket", "Bilder aus dem PDF", "nanoo.tv"):
         if stichwort not in seite:

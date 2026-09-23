@@ -1,6 +1,7 @@
 """Test-PDF: Fragetyp steht im Titel der Aufgabe — auch dort, wo die Form etwas anderes nahelegt.
 
     app/.venv/Scripts/python beispiele/pdf_typangaben.py   -> ausgabe/Typangaben_mit_Loesungen.pdf
+    (in der App als Vorlage: Kopie unter beispiele/Vorlage_Fragetypen_mit_Loesungen.pdf)
 
 Fallen (Form ≠ Titel): 2 Multiple Choice mit nur einer richtigen, 3 Richtig/Falsch mit genau 4 Aussagen
 (Form: kprim), 12 Freitext mit Ein-Wort-Antwort (Form: Lückentext). 14 ohne Typangabe (Kontrolle: kprim).

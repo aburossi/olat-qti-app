@@ -106,6 +106,64 @@ def neuer_satz(text: str, name: str, verbrauch=None, fehlende_seiten=None,
     st.session_state.pop("zip", None)
 
 
+VORLAGE_PDF = Path(__file__).parent.parent / "beispiele" / "Vorlage_Fragetypen_mit_Loesungen.pdf"
+
+# Erprobt am 23.09.2026 (beispiele/pdf_typangaben.py, Prüfungssimulation 4PR26b) — bei Änderungen an
+# umwandeln.SYSTEM hier nachziehen
+TIPPS_PDF = """
+**1. Fragetyp in die Überschrift der Aufgabe schreiben** — der zuverlässigste Weg zum gewünschten Typ:
+`Aufgabe 3 – Lückentext (2 Punkte)`. Die Angabe geht vor, auch wenn die Form mehrdeutig ist
+(Multiple Choice mit nur einer richtigen Antwort, «Richtig/Falsch» mit genau 4 Aussagen).
+
+| Schreiben Sie | ergibt in OLAT |
+|---|---|
+| Single Choice · Multiple Choice | Einfach- / Mehrfachauswahl |
+| Kprim · Richtig/Falsch | 4 Aussagen mit Teilpunkten · beliebig viele Aussagen |
+| Zuordnung (Matrix) · Drag and Drop | Tabelle zum Ankreuzen · Begriffe in Gruppen ziehen |
+| Reihenfolge | Elemente sortieren |
+| Lückentext · Zahl · Dropdown | Texteingabe · Zahl mit Toleranz · Auswahl in der Lücke |
+| Hottext | Wörter im Text anklicken |
+| Freitext · Upload | offene Antwort mit Musterlösung · Datei abgeben |
+
+**2. Punkte** in Klammern in die Überschrift: `(2 Punkte)`. Fehlen sie, gilt 1 Punkt (Freitext 2).
+
+**3. Lösungen rot** schreiben — die App erkennt Rot als Lösung:
+- Auswahl: die richtige Option ankreuzen (☒) und rot färben.
+- Lückentext: das Lösungswort rot **direkt in die Lücke**, im ganzen Satz. Varianten mit «/»: `Bern / Berne`.
+- Dropdown: Optionen in Klammern, die richtige rot: `dauert höchstens (1 / 3 / 6) Monate`.
+- Zahl: Ergebnis rot, Toleranz dazu: `42,5 (±0,5)`. Ohne Toleranz gilt ±1 %.
+- Hottext: die richtigen Wörter rot. Reihenfolge: `Lösung: A → B → C`.
+- Freitext: die Musterlösung rot unter die Frage.
+- Anderen Text **nicht** rot färben — sonst hält die App ihn für eine Lösung.
+
+**4. Teile als Überschriften** (`Teil A – Grundlagen`) werden Sektionen in OLAT. Ein Fallbeispiel, das für
+mehrere Fragen gilt, steht in jeder dieser Fragen.
+
+**5. Formatierung:** Fett, kursiv und Aufzählungen kommen mit. Schriftgrösse und Farben nicht.
+Texte **mit Zeilennummern** (Nummer am Zeilenanfang), **Tabellen mit Werten** und **Zwischentitel**:
+unten das Häkchen «Besondere Formatierung übernehmen» setzen.
+
+**6. Bilder und Medien:** Bilder direkt bei der Frage platzieren. Video/Audio als Link (YouTube, nanoo.tv,
+mp3) in die Frage — ausgeschrieben oder hinter einem Wort.
+
+**7. Das PDF selbst:** Aus Word/PowerPoint mit «Als PDF speichern», nicht gescannt — Scans gehen, sind aber
+unsicherer und teurer. Fragen, bei denen man **im Bild** klickt oder zeichnet, werden übersprungen.
+
+**Nie im PDF:** Antworten, Namen oder Noten von Lernenden — der Text geht an OpenAI.
+"""
+
+
+def tipps_pdf() -> None:
+    with st.expander("📋 So formatieren Sie Ihr PDF — Tipps für ein gutes Ergebnis"):
+        st.markdown(TIPPS_PDF)
+        if VORLAGE_PDF.is_file():
+            v1, v2 = st.columns([1, 3])
+            v1.download_button("Vorlage herunterladen", VORLAGE_PDF.read_bytes(), VORLAGE_PDF.name,
+                               "application/pdf", key="vorlage_pdf")
+            v2.caption("14 Aufgaben, je mit Fragetyp in der Überschrift und roter Lösung — alle 13 Typen der "
+                       "App. Als Muster für eigene Prüfungen oder zum Ausprobieren.")
+
+
 def aus_pdf() -> None:
     modell = MODELL
     st.info("Nur Tests mit Fragen und Lösungen hochladen — **keine Antworten von Lernenden, keine Namen, "
@@ -115,6 +173,7 @@ def aus_pdf() -> None:
                "er als Player unter dem Fragetext. Der Link muss für Lernende ohne Anmeldung erreichbar sein.")
     st.caption("🖼 **Bilder** (Diagramme, Schemas, Fotos) werden aus dem PDF übernommen und der Frage zugeordnet, "
                "bei der sie stehen. Logos auf jeder Seite und kleine Symbole werden ausgelassen.")
+    tipps_pdf()
     pdf = st.file_uploader("PDF mit Fragen und Lösungen", type=["pdf"])
     if not pdf:
         return
