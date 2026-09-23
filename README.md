@@ -84,7 +84,8 @@ fragen:                   # oder: sektionen: [{titel, mischen, fragen: [...]}]
 | `upload` | | `frage` |
 | `drawing` | zeichnen | `frage`, optional `bild` (sonst weisse Fläche 500×350) |
 
-**Bewertung — Punkte pro Antwort (Standard seit 23.09.2026).** Nachgebaut aus
+**Bewertung — Punkte pro Antwort (Standard seit 23.09.2026).** In OLAT importiert, Teilpunkte stimmen
+(23.09.2026, `beispiele/punkte_pro_antwort.yaml` und `beispiele/importtest.yaml`). Nachgebaut aus
 `referenz/punkte_pro_antwort/` (OpenOlat → Bewertung → «Punkte pro Antwort»). `punkte` bleibt die Summe
 der Frage und wird gleichmässig verteilt:
 
