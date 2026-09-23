@@ -111,30 +111,32 @@ def js_escape(s: str) -> str:
                    else f"%{ord(c):02X}" if ord(c) < 256 else f"%u{ord(c):04X}" for c in s)
 
 
-# $…$ = LaTeX-Formel, \$ = echtes Dollarzeichen; **…** = fett (nur wo fett=True)
-INLINE = re.compile(r"(?<!\\)\$(?P<mathe>[^$\n]+?)(?<!\\)\$|\*\*(?P<fett>.+?)\*\*")
+# $…$ = LaTeX-Formel, \$ = echtes Dollarzeichen; **…** = fett, *…* = kursiv, \* = echter Stern
+INLINE = re.compile(r"(?<!\\)\$(?P<mathe>[^$\n]+?)(?<!\\)\$"
+                    r"|\*\*(?P<fett>[^*\n]+?)\*\*"
+                    r"|(?<![\w*\\])\*(?![\s*])(?P<kursiv>[^*\n]+?)(?<![\s\\])\*(?![\w*])")
 
 
-def inline(el: ET.Element, text: str, fett: bool = False) -> ET.Element:
-    """Füllt el mit Text, Formeln (<span class="math"> wie der OLAT-Editor) und optional <strong>."""
+def inline(el: ET.Element, text: str) -> ET.Element:
+    """Füllt el mit Text, Formeln (<span class="math"> wie der OLAT-Editor), <strong> und <em>."""
     letztes, pos = None, 0
 
     def haenge(t: str) -> None:
-        t = t.replace("\\$", "$")
+        t = t.replace("\\$", "$").replace("\\*", "*")
         if letztes is None:
             el.text = (el.text or "") + t
         else:
             letztes.tail = (letztes.tail or "") + t
 
     for m in INLINE.finditer(text):
-        if m["fett"] is not None and not fett:
-            continue
         haenge(text[pos:m.start()])
         if m["mathe"] is not None:
             formel = m["mathe"].strip()
             letztes = E("span", {"class": "math", "title": js_escape(formel)}, text=formel)
-        else:
+        elif m["fett"] is not None:
             letztes = E("strong", text=m["fett"])
+        else:
+            letztes = E("em", text=m["kursiv"])
         el.append(letztes)
         pos = m.end()
     haenge(text[pos:])
@@ -145,6 +147,81 @@ def inline(el: ET.Element, text: str, fett: bool = False) -> ET.Element:
 
 def p(text: str) -> ET.Element:
     return inline(E("p"), str(text))
+
+
+# Zeilen in einem Absatz, Markdown-Teilmenge (Vorbild: Pietros Nachformatierung in OpenOlat, 23.09.2026)
+TITEL = re.compile(r"(#{1,4})\s+(.+)")               # ### Titel -> <h3>, #### -> <h4>
+LISTE = re.compile(r"(?:[-•*]|(\d{1,2})[.)])\s+(.+)")  # - Punkt -> <ul>, 1. Punkt -> <ol>
+TABELLE = re.compile(r"\|.*\|")                      # | a | b | -> <table>
+TRENNER = re.compile(r"\|(?::?-{3,}:?\|)+")          # |---|---| nach der Kopfzeile
+NUMMERIERT = re.compile(r"\d{1,3}\s")                # Text mit Zeilennummern: Umbrüche bleiben
+
+
+def _sonderzeile(z: str) -> bool:
+    return bool(TITEL.fullmatch(z) or LISTE.fullmatch(z) or TABELLE.fullmatch(z))
+
+
+def textabsatz(zeilen: list[str]) -> ET.Element:
+    """<p>; Zeilenumbruch <br/>, wo eine Zeile mit \\ endet oder jede Zeile mit einer Nummer beginnt."""
+    zeilen = [" ".join(z.split()) for z in zeilen]
+    nummeriert = len(zeilen) > 1 and all(NUMMERIERT.match(z) for z in zeilen)
+    el = E("p")
+    for i, z in enumerate(zeilen):
+        umbruch = z.endswith("\\")  # auch «\\»: Sprachmodelle verdoppeln Backslashes gern
+        anhaengen(el, z.rstrip("\\").rstrip() if umbruch else z)
+        if i < len(zeilen) - 1:
+            if umbruch or nummeriert:
+                el.append(E("br"))
+            else:
+                anhaengen(el, " ")
+    return el
+
+
+def tabelle(zeilen: list[str]) -> ET.Element:
+    kopf = len(zeilen) > 1 and TRENNER.fullmatch(zeilen[1].replace(" ", ""))
+    body = E("tbody")
+    for n, z in enumerate(zeilen):
+        if n == 1 and kopf:
+            continue
+        body.append(E("tr", None, *[inline(E("th" if kopf and n == 0 else "td"), " ".join(c.split()))
+                                    for c in z.strip()[1:-1].split("|")]))
+    return E("table", None, body)
+
+
+def bloecke(text: str | None) -> list[ET.Element]:
+    """Text -> XHTML-Blöcke. Leerzeile = neuer Absatz; darin Zeile für Zeile:
+    ### Titel, - Aufzählung, 1. Liste, | Tabelle |, sonst Fliesstext (Zeilen mit Leerzeichen verbunden)."""
+    out = []
+    if not text:
+        return out
+    for absatz in re.split(r"\n\s*\n", str(text).strip()):
+        zeilen = [z.strip() for z in absatz.splitlines() if z.strip()]
+        i = 0
+        while i < len(zeilen):
+            z = zeilen[i]
+            if m := TITEL.fullmatch(z):
+                out.append(inline(E("h4" if len(m[1]) == 4 else "h3"), m[2]))
+                i += 1
+            elif TABELLE.fullmatch(z):
+                j = i
+                while j < len(zeilen) and TABELLE.fullmatch(zeilen[j]):
+                    j += 1
+                out.append(tabelle(zeilen[i:j]))
+                i = j
+            elif m := LISTE.fullmatch(z):
+                geordnet = m[1] is not None
+                liste = E("ol" if geordnet else "ul")
+                while i < len(zeilen) and (m := LISTE.fullmatch(zeilen[i])) and (m[1] is not None) == geordnet:
+                    liste.append(inline(E("li"), m[2]))
+                    i += 1
+                out.append(liste)
+            else:
+                j = i + 1
+                while j < len(zeilen) and not _sonderzeile(zeilen[j]):
+                    j += 1
+                out.append(textabsatz(zeilen[i:j]))
+                i = j
+    return out
 
 
 def anhaengen(el: ET.Element, text: str) -> None:
@@ -173,7 +250,7 @@ def medium(m, ids) -> ET.Element:
 
 def stamm(f: dict, ids, frage=None) -> list[ET.Element]:
     """Fragetext-Absätze, danach die Medien aus `medien:`."""
-    return [*map(p, absaetze(frage if frage is not None else f.get("frage"))),
+    return [*bloecke(frage if frage is not None else f.get("frage")),
             *(medium(m, ids) for m in f.get("medien") or [])]
 
 
@@ -657,7 +734,7 @@ def mit_bildern(root: ET.Element, f: dict, bilder: Bilder) -> None:
     (XHTML-img im itemBody), Datei neben den Fragen im Paket wie hotspot.png im Referenz-Export.
     `bilder: [datei.png, …]` oder `[{datei, alt, breite, hoehe}]`, Pfade relativ zur YAML-Datei."""
     body = root.find(q("itemBody"))
-    pos = len(absaetze(f.get("frage")))
+    pos = len(bloecke(f.get("frage")))
     for eintrag in f["bilder"]:
         if isinstance(eintrag, str):
             eintrag = {"datei": eintrag}
@@ -716,11 +793,6 @@ def baue_frage(f: dict, ids: Ids, bilder: Bilder):
     return typ, f"{datei_id}.xml", datei_id, root, float(f.get("punkte", 1)), interaktionen
 
 
-def absatz_formatiert(text: str) -> ET.Element:
-    """<p> mit **fett** -> <strong> und $Formel$ -> <span class="math">."""
-    return inline(E("p"), text, fett=True)
-
-
 def mit_hinweis(root: ET.Element, hinweis) -> None:
     """Hinweis-Knopf unter der Antwort; Klick öffnet den Text als Dialog.
     Genau so schreibt OpenOlat den Reiter Feedback → «Hinweis» (referenz/hinweis/).
@@ -747,7 +819,7 @@ def mit_hinweis(root: ET.Element, hinweis) -> None:
 
 def dialog(outcome: str, ident: str, titel: str, text: str) -> ET.Element:
     mf = E("modalFeedback", {"showHide": "show", "outcomeIdentifier": outcome, "identifier": ident, "title": titel})
-    absaetze_ = [absatz_formatiert(a) for a in absaetze(text)]
+    absaetze_ = bloecke(text)
     for a in absaetze_[:-1]:
         a.tail = "\n"  # OpenOlat trennt die Absätze mit Zeilenumbruch
     mf.extend(absaetze_)

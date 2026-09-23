@@ -140,8 +140,24 @@ VIDEO UND AUDIO
 - Andere Links (Webseiten, Dokumente) nicht in `medien`, sondern im Fragetext lassen.
 - Keine Medien-Links erfinden; ohne Link `medien` = null.
 
-FORMAT IN TEXTEN
-- Absätze durch eine Leerzeile trennen. In `hinweis` und `musterloesung` ist **fett** erlaubt.
+FORMAT IN TEXTEN (Markdown)
+Der PDF-Text kommt mit seiner Formatierung: **fett**, *kursiv*, «- » vor Aufzählungspunkten, Tabellen als
+| Zelle | Zelle |. Übernimm die Formatierung in alle Texte (`frage`, Antworten, Aussagen, `text`, `hinweis`,
+`musterloesung`) — sie ist Teil des Wortlauts:
+- **fett** und *kursiv* genau dort, wo sie im PDF stehen (z. B. hervorgehobene Wörter wie «**nicht**»).
+  Nicht übernehmen: Fettdruck, der nur zum Layout gehört — Fragenummern («**S1a)**»), Punktangaben
+  («**(2 Punkte)**»), Kopf- und Fusszeilen, Tabellenköpfe von Ankreuztabellen.
+- Zwischentitel (eine fett gesetzte Zeile, die allein steht und einen Text oder Abschnitt einleitet, z. B.
+  «Die Situation» oder der Titel eines Zeitungstexts) als eigene Zeile «### Titel», ohne ** darum.
+- Absätze durch eine Leerzeile trennen. Innerhalb eines Absatzes Zeilen des PDFs zu Fliesstext verbinden —
+  AUSSER bei Texten mit Zeilennummern, Gedichten, Liedtexten, Adressen, Dialogen: dort bleibt jede Zeile
+  eine eigene Zeile, genau wie im PDF, mit der Zeilennummer am Zeilenanfang («1 Was ist …»); Fragen verweisen
+  auf diese Zeilen. Eine andere einzelne Zeile, die umbrechen soll, endet mit «\\».
+- Aufzählungen: jeder Punkt eine Zeile mit «- » (nummeriert: «1. »), über mehrere PDF-Zeilen umbrochene
+  Punkte zu einer Zeile verbinden.
+- Tabellen mit Inhalt (Werte, Angaben) als Markdown-Tabelle übernehmen: | Kopf | Kopf |, |---|---|,
+  | Zelle | Zelle |. Ankreuztabellen (richtig/falsch, Zuordnung) werden der passende Fragetyp, keine Tabelle.
+- Ein echtes Sternchen als \\* schreiben.
 
 FORMELN
 - JEDE Formel und jede Formelgrösse mit Index wird LaTeX zwischen Dollarzeichen — in allen Texten, auch im
@@ -256,23 +272,110 @@ def bilder_aus_pdf(daten: bytes) -> list[dict]:
     return funde
 
 
-def pdf_text_mit_bildern(daten: bytes, funde: list[dict]) -> str:
-    """Seitentext in Leserichtung, an jeder Bildstelle «[Bild: name]» — so ordnet das Modell zu."""
+FETT = re.compile(r"bold|black|heavy|semibold|demi", re.I)
+KURSIV = re.compile(r"italic|oblique", re.I)
+
+
+def _stil(sp: dict) -> tuple[bool, bool]:
+    """(fett, kursiv) — aus den Flags oder, wo das PDF sie nicht setzt, aus dem Schriftnamen (Arial-Black)."""
+    return (bool(sp["flags"] & 16 or FETT.search(sp["font"])),
+            bool(sp["flags"] & 2 or KURSIV.search(sp["font"])))
+
+
+def _markiert(spans: list[dict]) -> str:
+    """Spans einer Zeile -> Text mit **fett** und *kursiv*; gleiche Stile werden zusammengefasst."""
+    gruppen: list[list] = []
+    for sp in spans:
+        stil = _stil(sp) if sp["text"].strip() else None
+        if gruppen and (stil is None or gruppen[-1][0] == stil):
+            gruppen[-1][1] += sp["text"]
+        else:
+            gruppen.append([stil, sp["text"]])
+    out = ""
+    for stil, t in gruppen:
+        m = {(True, True): "***", (True, False): "**", (False, True): "*"}.get(stil or (False, False), "")
+        kern = t.strip()
+        if not m or not kern:
+            out += t
+            continue
+        out += t[:len(t) - len(t.lstrip())] + m + kern + m + t[len(t.rstrip()):]
+    return out
+
+
+def _punkte(s) -> list:
+    """Gezeichnete Aufzählungspunkte (kleine gefüllte Kreise/Quadrate) — sie stehen nicht im Text."""
+    return [d["rect"] for d in s.get_drawings()
+            if d.get("fill") and d["rect"].width <= 8 and d["rect"].height <= 8
+            and abs(d["rect"].width - d["rect"].height) < 2]
+
+
+def _zeilen(block: dict, punkte: list) -> list[str]:
+    """Zeilen eines Textblocks. Teile auf gleicher Höhe werden nach x sortiert zu einer Zeile —
+    sonst landet eine Zeilennummer am Rand hinter ihrer Zeile statt davor (23.09.2026)."""
+    gruppen: list[list[dict]] = []
+    for l in sorted(block.get("lines", []), key=lambda l: l["bbox"][1]):
+        y0, y1 = l["bbox"][1], l["bbox"][3]
+        if gruppen:
+            g0, g1 = min(x["bbox"][1] for x in gruppen[-1]), max(x["bbox"][3] for x in gruppen[-1])
+            if min(y1, g1) - max(y0, g0) > 0.5 * min(y1 - y0, g1 - g0):
+                gruppen[-1].append(l)
+                continue
+        gruppen.append([l])
+    out = []
+    for g in gruppen:
+        g.sort(key=lambda l: l["bbox"][0])
+        text = " ".join(_markiert(l["spans"]).strip() for l in g if "".join(sp["text"] for sp in l["spans"]).strip())
+        if not text:
+            continue
+        x0, y0, y1 = g[0]["bbox"][0], min(l["bbox"][1] for l in g), max(l["bbox"][3] for l in g)
+        if any(0 <= x0 - r.x1 < 15 and y0 <= (r.y0 + r.y1) / 2 <= y1 for r in punkte):
+            text = "- " + text
+        out.append(text)
+    return out
+
+
+def _tabellen(s) -> list[tuple]:
+    """Tabellen mit mind. 2×2 Zellen als (Rechteck, Markdown) — ein Rahmen um eine Frage ist keine Tabelle."""
+    try:
+        gefunden = s.find_tables().tables
+    except Exception:  # Tabellensuche ist Zugabe, darf die Umwandlung nie stoppen
+        return []
+    return [(pymupdf.Rect(t.bbox), t.to_markdown().replace("<br>", " ").strip())
+            for t in gefunden if t.row_count >= 2 and t.col_count >= 2]
+
+
+def seitentext(s, name_zu: dict | None = None, nr: int = 0) -> str:
+    """Text einer Seite in Leserichtung mit Formatierung als Markdown — **fett**, *kursiv*,
+    - Aufzählung, | Tabelle | — und an jeder Bildstelle «[Bild: name]»."""
     import hashlib
+    punkte, tabellen = _punkte(s), _tabellen(s)
+    gesetzt: set[int] = set()
+    zeilen = []
+    for b in s.get_text("dict", sort=True)["blocks"]:
+        x0, y0, x1, y1 = b["bbox"]
+        mitte = pymupdf.Point((x0 + x1) / 2, (y0 + y1) / 2)
+        drin = next((i for i, (r, _) in enumerate(tabellen) if mitte in r), None)
+        if drin is not None:
+            if drin not in gesetzt:
+                gesetzt.add(drin)
+                zeilen += ["", tabellen[drin][1], ""]
+            continue
+        if b.get("type") == 1:
+            name = (name_zu or {}).get((nr, hashlib.sha1(b["image"]).hexdigest()))
+            if name:
+                zeilen.append(f"[Bild: {name}]")
+        else:
+            zeilen += _zeilen(b, punkte)
+    return "\n".join(zeilen)
+
+
+def pdf_text_mit_bildern(daten: bytes, funde: list[dict]) -> str:
+    """Seitentext mit Formatierung, an jeder Bildstelle «[Bild: name]» — so ordnet das Modell zu."""
     name_zu = {(f["seite"], f["hash"]): f["name"] for f in funde}
     teile = []
     with pymupdf.open(stream=daten, filetype="pdf") as doc:
         for nr, s in enumerate(doc, 1):
-            zeilen = [f"--- Seite {nr} ---"]
-            for b in s.get_text("dict", sort=True)["blocks"]:
-                if b.get("type") == 1:
-                    name = name_zu.get((nr, hashlib.sha1(b["image"]).hexdigest()))
-                    if name:
-                        zeilen.append(f"[Bild: {name}]")
-                else:
-                    for z in b.get("lines", []):
-                        zeilen.append("".join(sp["text"] for sp in z["spans"]))
-            teile.append("\n".join(zeilen) + "\n" + _linkliste(s))
+            teile.append(f"--- Seite {nr} ---\n{seitentext(s, name_zu, nr)}\n{_linkliste(s)}")
     return "\n".join(teile)
 
 
@@ -283,9 +386,10 @@ def seiten_als_bild(daten: bytes, nummern: list[int]) -> list[tuple[int, bytes]]
 
 
 def pdf_text(daten: bytes) -> tuple[str, int]:
-    """Text aller Seiten mit Seitenmarken; zweiter Wert = Seitenzahl."""
-    seiten = analysiere_pdf(daten)
-    return "\n".join(f"--- Seite {s['nr']} ---\n{s['text']}" for s in seiten), len(seiten)
+    """Text aller Seiten mit Seitenmarken und Formatierung; zweiter Wert = Seitenzahl."""
+    with pymupdf.open(stream=daten, filetype="pdf") as doc:
+        anzahl = doc.page_count
+    return pdf_text_mit_bildern(daten, []), anzahl
 
 
 def nachricht(text: str, bilder: list[tuple[int, bytes]]) -> str | list[dict]:
@@ -455,6 +559,20 @@ def pruefe_bilder(satz: dict, namen: set[str]) -> list[str]:
         else:
             f.pop("bilder", None)
     return sorted(namen - benutzt)
+
+
+def als_yaml(satz: dict) -> str:
+    """Fragensatz als YAML; mehrzeilige Texte als |-Block, damit Zeilen und Absätze lesbar bleiben."""
+    import yaml
+
+    class Dumper(yaml.SafeDumper):
+        pass
+
+    def text(d, s):
+        s = "\n".join(z.rstrip() for z in s.split("\n")) if "\n" in s else s
+        return d.represent_scalar("tag:yaml.org,2002:str", s, style="|" if "\n" in s else None)
+    Dumper.add_representer(str, text)
+    return yaml.dump(satz, Dumper=Dumper, allow_unicode=True, sort_keys=False, width=100)
 
 
 def yaml_aus_antwort(antwort: str) -> str:

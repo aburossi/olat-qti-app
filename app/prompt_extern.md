@@ -123,9 +123,13 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
         punkte: 5
         zeilen: 8               # Grösse des Antwortfelds
         frage: |
-          Ein Blech wird gebogen und federt teilweise zurück.
+          ### Ausgangslage
+          Ein Blech wird gebogen und federt *teilweise* zurück. Im Protokoll steht:
+          1 Blech eingespannt
+          2 um 90° gebogen
+          3 losgelassen: Winkel 84°
 
-          Erklären Sie den Vorgang mit den Begriffen elastisch und plastisch.
+          Erklären Sie den Vorgang mit den Begriffen **elastisch** und **plastisch**.
         hinweis: Denken Sie an die **Elastizitätsgrenze**.   # optional, nur freitext; Lernende sehen ihn IM Test
         # hinweis: {titel: Tipp, text: "…"}                 # mit eigener Knopfbeschriftung (Standard «Hinweis»)
         musterloesung: |                                      # nur freitext; für die Korrektur, nicht im Test sichtbar
@@ -165,7 +169,16 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 - Erlaubte `typ`: sc, mc, kprim, richtigfalsch, matrix, dragdrop, reihenfolge, lueckentext,
   numerisch, dropdown, gemischt, hottext, freitext, upload, zeichnen.
 - `punkte` bei jeder Frage (Zahl, auch 0.5 möglich). `titel` kurz, mit Nummer aus der Vorlage.
-- Leerzeile im Text = neuer Absatz. `**fett**` nur in `hinweis` und `musterloesung`.
+- **Formatierung wie in Markdown**, in allen Texten — übernimm sie aus meiner Vorlage, wo sie dort steht:
+  - `**fett**`, `*kursiv*` (echtes Sternchen: `\*`); in Antworten und Aussagen nur diese beiden.
+  - Leerzeile = neuer Absatz. Zeilen ohne Leerzeile dazwischen werden zu Fliesstext verbunden —
+    ausser eine Zeile endet mit `\` (Zeilenumbruch) oder **jede** Zeile des Absatzes beginnt mit einer
+    Nummer: dann bleibt jede Zeile eine eigene Zeile. So bleiben Texte mit Zeilennummern
+    («1 Was ist …», «2 Das Wichtigste …»), Gedichte und Adressen zeilengenau.
+  - `### Zwischentitel` als eigene Zeile (z. B. «### Die Situation» oder der Titel eines Zeitungstexts).
+  - Aufzählung: Zeilen mit `- `, nummeriert mit `1. `.
+  - Tabelle: `| Kopf | Kopf |`, darunter `|---|---|`, dann `| Zelle | Zelle |`.
+  - Nicht als Formatierung übernehmen: fette Fragenummern und Punktangaben, Kopf- und Fusszeilen.
 - Formeln als LaTeX zwischen Dollarzeichen, z. B. $p \cdot V = n \cdot R \cdot T$ oder $\frac{V_1}{T_1} = \frac{V_2}{T_2}$ — in allen Texten: `frage`, Antworten, Aussagen, `hinweis`, `musterloesung` und im `text` von Lückentypen, nur nicht in der Lücke selbst («$p_2$ = {{#3±0.05}} bar»). OLAT zeigt sie als gesetzte Formel. Ein echtes Dollarzeichen als \$ schreiben.
 - `hinweis` und `musterloesung` gibt es **nur bei `freitext`** — bei anderen Typen weglassen.
 - `kprim` hat genau 4 Aussagen; `sc` genau eine richtige Antwort; `mc` mindestens eine.

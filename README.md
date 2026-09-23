@@ -90,18 +90,29 @@ Aufbau nach QTI-Standard, **in OLAT importiert und angezeigt am 22.09.2026** (`b
 Die App holt Bilder aus dem PDF (Logos auf mehr als der Hälfte der Seiten und Bilder unter 80 px fallen
 weg), setzt an ihrer Stelle «[Bild: s2_bild1.jpg]» in den Text, und das Modell ordnet sie den Fragen zu.
 
+**Formatierung (Markdown-Teilmenge)** in allen Texten (`frage`, Antworten, Aussagen, `text`, `hinweis`,
+`musterloesung`): `**fett**` → `<strong>`, `*kursiv*` → `<em>` (`\*` = echter Stern); je Zeile eines Absatzes
+`### Titel` → `<h3>` (`####` → `<h4>`), `- Punkt` → `<ul>`, `1. Punkt` → `<ol>`, `| a | b |` (mit `|---|`
+nach der Kopfzeile) → `<table>`. Zeilen eines Absatzes werden zu Fliesstext verbunden, ausser eine Zeile endet
+mit `\` (→ `<br/>`) oder **jede** Zeile beginnt mit einer Nummer (Text mit Zeilennummern: jede Zeile bleibt).
+In Antworten/Aussagen/Lückentext nur fett, kursiv, Formeln. Vorbild: Pietros Nachformatierung in OLAT
+(`referenz/formatierung/`, 23.09.2026: `<h3>`, `<strong>`, `<br/>`); `<em>`, Listen und Tabellen sind
+QTI-konform, aber noch nicht an einem OLAT-Export verifiziert. Die App liefert dem Modell den PDF-Text schon
+mit `**fett**`, `*kursiv*`, `- ` (auch gezeichnete Aufzählungspunkte) und Markdown-Tabellen; Zeilennummern am
+Rand stehen vor ihrer Zeile. Schriftgrösse und Farbe gehen nicht mit.
+
 **Formeln (LaTeX):** `$…$` in `frage`, Antworten, Aussagen, `hinweis`, `musterloesung` →
 `<span class="math" title="…">…</span>` wie der OLAT-Formeleditor (title = Formel mit JavaScript-`escape()`
 kodiert). Nachgebaut aus `referenz/latex/` (Frage A2 aus `referenz/FOTOSINTESI.zip`). `\$` = echtes
 Dollarzeichen. Auch im `text` von Lücken- und Hottext-Typen (zwischen den Lücken, nicht darin).
 
 **Hinweis, nur Freitext:** `hinweis: "Text"` oder `{titel: Knopfbeschriftung, text: …}`
-(Std.-Titel «Hinweis», `**fett**` erlaubt, Leerzeile = Absatz). Unter dem Antwortfeld
+(Std.-Titel «Hinweis», Formatierung wie oben). Unter dem Antwortfeld
 erscheint ein Knopf, der den Text als Dialog öffnet — **während des Tests sichtbar**.
 Nachgebaut aus `referenz/hinweis/` (Frage C1 aus `referenz/TestFachkunde.zip`).
 
 **Musterlösung, nur Freitext:** `musterloesung: "Text"` oder `{titel, text}` (Std.-Titel
-«Korrekte Lösung», `**fett**` erlaubt). Entspricht in OLAT Feedback → «Korrekte Lösung»:
+«Korrekte Lösung», Formatierung wie oben). Entspricht in OLAT Feedback → «Korrekte Lösung»:
 kein Knopf im Test; OLAT zeigt sie bei der Korrektur und — nur wenn in den
 Testeinstellungen freigegeben — in den Resultaten der Lernenden. Die Pakete dieses
 Skripts geben sie nicht frei (`showSolution="false"`). Nachgebaut aus `referenz/loesung/`

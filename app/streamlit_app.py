@@ -169,7 +169,7 @@ def aus_pdf() -> None:
     satz = umwandeln.zu_fragensatz(roh)
     umwandeln.pruefe_medien(satz, text)
     ohne_frage = umwandeln.pruefe_bilder(satz, {f["name"] for f in funde})
-    neuer_satz(yaml.safe_dump(satz, allow_unicode=True, sort_keys=False, width=100), Path(pdf.name).stem,
+    neuer_satz(umwandeln.als_yaml(satz), Path(pdf.name).stem,
                {**verbrauch, "modell": modell}, [s["nr"] for s in problemseiten] if not bildseiten else [],
                {f["name"]: f["daten"] for f in funde}, ohne_frage)
     zaehler.protokolliere(nutzer, "pdf", {**verbrauch, "modell": modell}, umwandeln.kosten(verbrauch, modell),

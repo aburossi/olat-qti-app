@@ -37,6 +37,9 @@ Streamlit, zwei Wege zum selben YAML → `olatqti.py` → Zip:
 - **YAML einfügen:** Lehrperson kopiert `app/prompt_extern.md` in die eigene KI und fügt die
   Antwort ein. Kein OpenAI-Aufruf. Das Beispiel im Prompt muss baubar bleiben (`tests/test_app.py`).
   Ändert sich das Format, Prompt und Skill `olat-test` mitziehen.
+- **Formatierung** (23.09.2026): Texte sind eine Markdown-Teilmenge (`bloecke()` in `olatqti.py`);
+  `umwandeln.seitentext()` liefert dem Modell den PDF-Text schon markiert. Beschreibung: README.
+  `test_referenz.py` braucht lxml — im App-venv fehlt es, mit einem Python mit lxml laufen lassen.
 
 **Nutzungszähler** (`app/zaehler.py`): je Umwandlung eine Zeile in `public.olat_umwandlungen` im
 bbw-hko-Supabase — wer, wann, Modell, Tokens, Kosten, Fragen/Seiten/Bilder, Quelle pdf|yaml.
@@ -47,6 +50,6 @@ liefert `public.olat_nutzung(tage)` (security definer mit Rollencheck). Migratio
 
 Login = Microsoft über das Supabase-Projekt von bbw-hko (`app/auth.py`), gleiche Konten und Rollen; Zugang für `lp`, `kt1`, `reviewer`, nicht `gast`.
 Lokal: Preview `olat-qti-app` (Port 8501, fest — Rücksprung-URL). Tests:
-`app/.venv/Scripts/python tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py` , `tests/test_latex.py` und `tests/test_app.py`
+`app/.venv/Scripts/python tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
 (Seiten ohne Text werden erkannt und auf Wunsch als Bild an OpenAI geschickt). Das PDF geht an OpenAI — nur
 Fragen/Lösungen, nie Lernendenantworten (Router §4, Hinweis in der App).

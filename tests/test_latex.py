@@ -1,4 +1,4 @@
-"""LaTeX ($…$) und fett (**…**) im Text — Randfälle, ohne OLAT.
+"""LaTeX ($…$), fett (**…**) und kursiv (*…*) im Text — Randfälle, ohne OLAT.
 
 Das eigentliche Format prüft test_referenz.py gegen einen OLAT-Export (referenz/latex/).
 Hier: Dollarzeichen ohne Formel, Escape, Umlaute/Unicode im title, Antworten mit Formeln.
@@ -20,14 +20,15 @@ def roh(el):
 
 
 FAELLE = [
-    # (Text, fett erlaubt, erwartetes XML)
-    ("Ohne Formel.", False, "<p>Ohne Formel.</p>"),
-    ("Preis 5 \\$ pro Stück", False, "<p>Preis 5 $ pro Stück</p>"),
-    ("Das kostet $5 und $6", False, '<p>Das kostet <span class="math" title="5%20und%20">5 und</span>6</p>'),
-    ("Es gilt $p \\cdot V = konst.$ bei gleicher Temperatur.", False,
+    # (Text, erwartetes XML)
+    ("Ohne Formel.", "<p>Ohne Formel.</p>"),
+    ("Preis 5 \\$ pro Stück", "<p>Preis 5 $ pro Stück</p>"),
+    ("Das kostet $5 und $6", '<p>Das kostet <span class="math" title="5%20und%20">5 und</span>6</p>'),
+    ("Es gilt $p \\cdot V = konst.$ bei gleicher Temperatur.",
      '<p>Es gilt <span class="math" title="p%20%5Ccdot%20V%20%3D%20konst.">p \\cdot V = konst.</span> bei gleicher Temperatur.</p>'),
-    ("**fett** bleibt Text, wo fett nicht erlaubt ist", False, "<p>**fett** bleibt Text, wo fett nicht erlaubt ist</p>"),
-    ("Mit **fett** und $\\Delta T$.", True,
+    ("Auch in Antworten: **fett** und *kursiv*.", "<p>Auch in Antworten: <strong>fett</strong> und <em>kursiv</em>.</p>"),
+    ("Kein kursiv: 3*4*5, a * b, \\*Stern\\*","<p>Kein kursiv: 3*4*5, a * b, *Stern*</p>"),
+    ("Mit **fett** und $\\Delta T$.",
      '<p>Mit <strong>fett</strong> und <span class="math" title="%5CDelta%20T">\\Delta T</span>.</p>'),
 ]
 
@@ -39,8 +40,8 @@ def main() -> int:
     for ein, soll in [("\\frac{3}{4+12}", "%5Cfrac%7B3%7D%7B4+12%7D"), ("Δ °C", "%u0394%20%B0C"), ("a/b-c_d*e@f.g", "a/b-c_d*e@f.g")]:
         if o.js_escape(ein) != soll:
             fehler.append(f"js_escape({ein!r}) = {o.js_escape(ein)!r}, erwartet {soll!r}")
-    for text, fett, soll in FAELLE:
-        ist = roh(o.inline(o.E("p"), text, fett=fett))
+    for text, soll in FAELLE:
+        ist = roh(o.inline(o.E("p"), text))
         # «$5 und $» ist absichtlich eine Formel (Paar gefunden) — dokumentiert, nicht schön; \$ schützt
         soll_norm = soll.replace('title="5%20und%20">5 und</span>', 'title="5%20und">5 und</span>')
         if ist != soll_norm:
