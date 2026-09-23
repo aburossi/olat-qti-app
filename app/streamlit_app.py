@@ -164,6 +164,20 @@ def tipps_pdf() -> None:
                        "App. Als Muster für eigene Prüfungen oder zum Ausprobieren.")
 
 
+def openai_zugang(email: str) -> tuple[str | None, str]:
+    """(Schlüssel, Abrechnung): eigener Schlüssel einer anderen Schule, wenn das Konto dort aufgeführt ist,
+    sonst der bbw-Schlüssel. In den Secrets (23.09.2026, BMS):
+        [schluessel.bms]
+        name = "BMS"
+        api_key = "sk-…"
+        konten = ["testuser@bms-w.ch"]"""
+    email = (email or "").strip().lower()
+    for kuerzel, eintrag in (st.secrets.get("schluessel", {}) or {}).items():
+        if email in {str(k).strip().lower() for k in eintrag.get("konten", [])}:
+            return eintrag.get("api_key") or None, str(eintrag.get("name", kuerzel))
+    return st.secrets.get("openai", {}).get("api_key") or None, "bbw"
+
+
 def aus_pdf() -> None:
     modell = MODELL
     st.info("Nur Tests mit Fragen und Lösungen hochladen — **keine Antworten von Lernenden, keine Namen, "
@@ -213,10 +227,13 @@ def aus_pdf() -> None:
              "Tabellen als Aufzählung. Mit Haken: Jede Zeile eines nummerierten Texts bleibt eine eigene Zeile "
              "(z. B. für Fragen wie «Geben Sie die Zeile an»), Tabellen bleiben Tabellen, Zwischentitel werden "
              "Überschriften. Schriftgrösse und Farbe gehen in beiden Fällen nicht mit.")
+    schluessel, abrechnung = openai_zugang(nutzer["email"])
+    if abrechnung != "bbw":
+        st.caption(f"Die Umwandlung läuft über den OpenAI-Schlüssel der {abrechnung}.")
     if not st.button("In Fragen umwandeln", type="primary"):
         return
-    if not st.secrets.get("openai", {}).get("api_key"):
-        st.error("In den Secrets fehlt der OpenAI-Schlüssel. Ergänzen:\n\n"
+    if not schluessel:
+        st.error(f"In den Secrets fehlt der OpenAI-Schlüssel ({abrechnung}). Ergänzen:\n\n"
                  '```toml\n[openai]\napi_key = "sk-…"\n```\n\n'
                  "Ohne Schlüssel funktioniert der Weg «YAML einfügen» trotzdem.")
         return
@@ -232,7 +249,7 @@ def aus_pdf() -> None:
     with st.spinner(f"{anzahl} Seiten werden umgewandelt{zusatz} ({modell}) …"):
         try:
             roh, verbrauch = umwandeln.frage_openai(
-                OpenAI(api_key=st.secrets["openai"]["api_key"]), modell, text, bilder, erweitert=erweitert)
+                OpenAI(api_key=schluessel), modell, text, bilder, erweitert=erweitert)
         except Exception as e:  # Netz, Schlüssel, Kontingent, Abbruch — alles dem Menschen zeigen
             st.error(f"Umwandlung fehlgeschlagen: {e}")
             return
