@@ -39,6 +39,8 @@ Streamlit, zwei Wege zum selben YAML → `olatqti.py` → Zip:
   Ändert sich das Format, Prompt und Skill `olat-test` mitziehen.
 - **Formatierung** (23.09.2026): Texte sind eine Markdown-Teilmenge (`bloecke()` in `olatqti.py`);
   `umwandeln.seitentext()` liefert dem Modell den PDF-Text schon markiert. Beschreibung: README.
+  Zwei Prompt-Stufen (Häkchen in der App): `SYSTEM` = einfach (fett, kursiv, Listen, Zeilen mit Nummer),
+  `SYSTEM_ERWEITERT` = zusätzlich Tabellen und ### Zwischentitel. Gemeinsamer Teil in `SYSTEM_VORLAGE`.
   `test_referenz.py` braucht lxml — im App-venv fehlt es, mit einem Python mit lxml laufen lassen.
 
 **Nutzungszähler** (`app/zaehler.py`): je Umwandlung eine Zeile in `public.olat_umwandlungen` im

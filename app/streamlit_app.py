@@ -148,6 +148,12 @@ def aus_pdf() -> None:
     if funde:
         st.caption(f"🖼 {len(funde)} Bild(er) gefunden — werden den Fragen zugeordnet.")
 
+    erweitert = st.checkbox(
+        "Besondere Formatierung übernehmen — Texte mit Zeilennummern, Tabellen, Zwischentitel",
+        help="Ohne Haken: Fett, Kursiv und Aufzählungen werden übernommen, Zeilen zu Fliesstext verbunden, "
+             "Tabellen als Aufzählung. Mit Haken: Jede Zeile eines nummerierten Texts bleibt eine eigene Zeile "
+             "(z. B. für Fragen wie «Geben Sie die Zeile an»), Tabellen bleiben Tabellen, Zwischentitel werden "
+             "Überschriften. Schriftgrösse und Farbe gehen in beiden Fällen nicht mit.")
     if not st.button("In Fragen umwandeln", type="primary"):
         return
     if not st.secrets.get("openai", {}).get("api_key"):
@@ -167,11 +173,11 @@ def aus_pdf() -> None:
     with st.spinner(f"{anzahl} Seiten werden umgewandelt{zusatz} ({modell}) …"):
         try:
             roh, verbrauch = umwandeln.frage_openai(
-                OpenAI(api_key=st.secrets["openai"]["api_key"]), modell, text, bilder)
+                OpenAI(api_key=st.secrets["openai"]["api_key"]), modell, text, bilder, erweitert=erweitert)
         except Exception as e:  # Netz, Schlüssel, Kontingent, Abbruch — alles dem Menschen zeigen
             st.error(f"Umwandlung fehlgeschlagen: {e}")
             return
-    satz = umwandeln.zu_fragensatz(roh)
+    satz = umwandeln.zu_fragensatz(roh, erweitert=erweitert)
     umwandeln.pruefe_medien(satz, text)
     ohne_frage = umwandeln.pruefe_bilder(satz, {f["name"] for f in funde})
     neuer_satz(umwandeln.als_yaml(satz), Path(pdf.name).stem,

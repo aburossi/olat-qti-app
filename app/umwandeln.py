@@ -64,7 +64,7 @@ SCHEMA = {
                    "uebersprungen": _LISTE},
 }
 
-SYSTEM = """Du überträgst einen Test aus einem PDF in ein strukturiertes Format für OLAT.
+SYSTEM_VORLAGE = """Du überträgst einen Test aus einem PDF in ein strukturiertes Format für OLAT.
 Das PDF enthält Fragen UND Lösungen. Deine Aufgabe ist Übertragen, nicht Erfinden.
 
 GRUNDREGELN
@@ -140,7 +140,39 @@ VIDEO UND AUDIO
 - Andere Links (Webseiten, Dokumente) nicht in `medien`, sondern im Fragetext lassen.
 - Keine Medien-Links erfinden; ohne Link `medien` = null.
 
-FORMAT IN TEXTEN (Markdown)
+{format}FORMELN
+- JEDE Formel und jede Formelgrösse mit Index wird LaTeX zwischen Dollarzeichen — in allen Texten, auch im
+  `text` von Lückentypen (nur nicht in der Lücke selbst). Im PDF stehen sie meist als Klartext; so setzt du sie um:
+    «p1 · V1 = p2 · V2»        → $p_1 \\cdot V_1 = p_2 \\cdot V_2$
+    «p / T = konstant»         → $\\frac{p}{T} = \\text{konstant}$
+    «V2» im Fliesstext         → $V_2$
+    «R = 8,314 J/(mol · K)»    → $R = 8{,}314\\,\\frac{\\text{J}}{\\text{mol} \\cdot \\text{K}}$
+    «V1 = 6 L»                 → $V_1 = 6\\,\\text{L}$
+  Zahlen mit Einheit ohne Formelzeichen («22 °C», «3 bar» allein) bleiben Text.
+- In einer Lücke {{…}} nie LaTeX: «$p_2$ = {{#3±0.05}} bar» ist richtig.
+- Jeden Backslash in LaTeX genau EINMAL schreiben: \\cdot, nicht \\\\cdot.
+- Ein echtes Dollarzeichen als \\$ schreiben."""
+
+
+# Zwei Stufen (23.09.2026): «einfach» wie bisher bewährt, «erweitert» auf Wunsch der Lehrperson
+# für Texte mit Zeilennummern, Tabellen, Zwischentitel. Der Konverter versteht beides.
+FORMAT_EINFACH = """FORMAT IN TEXTEN
+Der PDF-Text kommt mit seiner Formatierung: **fett**, *kursiv*, «- » vor Aufzählungspunkten.
+- Die Marker **…** und *…* im PDF-Text sind echte Hervorhebungen des PDFs: in allen Texten mitkopieren,
+  genau wo sie stehen (z. B. «**nicht**», ein kursives Zitat, eine fette Frage im Interview).
+  Weglassen nur bei Fettdruck, der zum Layout gehört — Fragenummern («**S1a)**»), Punktangaben,
+  Kopf- und Fusszeilen. Ein Zwischentitel bleibt ein eigener Absatz in **fett**.
+- Aufzählungen: jeder Punkt eine Zeile mit «- » (nummeriert: «1. »), umbrochene Punkte zu einer Zeile verbinden.
+- Absätze durch eine Leerzeile trennen. Zeilen des PDFs innerhalb eines Absatzes zu Fliesstext verbinden —
+  ausser bei einem Text mit Zeilennummern: dort bleibt jede Zeile eine eigene Zeile, mit ihrer Nummer vorne.
+- Tabellen mit Inhalt als Aufzählung übertragen: je Tabellenzeile ein Punkt «- Zelle: Zelle, Zelle».
+  Ankreuztabellen (richtig/falsch, Zuordnung) werden der passende Fragetyp.
+- Ein echtes Sternchen als \\* schreiben.
+- Jede Stelle des PDFs genau einmal: keinen Satz zusätzlich als Titel oder eigenen Absatz wiederholen.
+
+"""
+
+FORMAT_ERWEITERT = """FORMAT IN TEXTEN (Markdown)
 Der PDF-Text kommt mit seiner Formatierung: **fett**, *kursiv*, «- » vor Aufzählungspunkten, Tabellen als
 | Zelle | Zelle |. Übernimm die Formatierung in alle Texte (`frage`, Antworten, Aussagen, `text`, `hinweis`,
 `musterloesung`) — sie ist Teil des Wortlauts:
@@ -160,19 +192,12 @@ Der PDF-Text kommt mit seiner Formatierung: **fett**, *kursiv*, «- » vor Aufz�
   Ohne Kopfzeile im PDF die Zeile |---|---| weglassen. Ankreuztabellen (richtig/falsch, Zuordnung) werden der
   passende Fragetyp, keine Tabelle. Eine Tabelle, die Lernende ausfüllen sollen, als leere Tabelle in `frage`.
 - Ein echtes Sternchen als \\* schreiben.
+- Jede Stelle des PDFs genau einmal: keinen Satz zusätzlich als Titel oder eigenen Absatz wiederholen.
 
-FORMELN
-- JEDE Formel und jede Formelgrösse mit Index wird LaTeX zwischen Dollarzeichen — in allen Texten, auch im
-  `text` von Lückentypen (nur nicht in der Lücke selbst). Im PDF stehen sie meist als Klartext; so setzt du sie um:
-    «p1 · V1 = p2 · V2»        → $p_1 \\cdot V_1 = p_2 \\cdot V_2$
-    «p / T = konstant»         → $\\frac{p}{T} = \\text{konstant}$
-    «V2» im Fliesstext         → $V_2$
-    «R = 8,314 J/(mol · K)»    → $R = 8{,}314\\,\\frac{\\text{J}}{\\text{mol} \\cdot \\text{K}}$
-    «V1 = 6 L»                 → $V_1 = 6\\,\\text{L}$
-  Zahlen mit Einheit ohne Formelzeichen («22 °C», «3 bar» allein) bleiben Text.
-- In einer Lücke {{…}} nie LaTeX: «$p_2$ = {{#3±0.05}} bar» ist richtig.
-- Jeden Backslash in LaTeX genau EINMAL schreiben: \\cdot, nicht \\\\cdot.
-- Ein echtes Dollarzeichen als \\$ schreiben."""
+"""
+
+SYSTEM = SYSTEM_VORLAGE.replace("{format}", FORMAT_EINFACH)
+SYSTEM_ERWEITERT = SYSTEM_VORLAGE.replace("{format}", FORMAT_ERWEITERT)
 
 
 SCAN_ZUSATZ = """
@@ -406,10 +431,11 @@ def nachricht(text: str, bilder: list[tuple[int, bytes]]) -> str | list[dict]:
     return teile
 
 
-def frage_openai(client, modell: str, text: str, bilder: list[tuple[int, bytes]] | None = None) -> tuple[dict, dict]:
+def frage_openai(client, modell: str, text: str, bilder: list[tuple[int, bytes]] | None = None,
+                 erweitert: bool = False) -> tuple[dict, dict]:
     antwort = client.chat.completions.create(
         model=modell,
-        messages=[{"role": "system", "content": SYSTEM + (SCAN_ZUSATZ if bilder else "")
+        messages=[{"role": "system", "content": (SYSTEM_ERWEITERT if erweitert else SYSTEM) + (SCAN_ZUSATZ if bilder else "")
                    + (BILD_ZUSATZ if "[Bild: " in text else "")},
                   {"role": "user", "content": nachricht(text, bilder or [])}],
         response_format={"type": "json_schema",
@@ -424,9 +450,9 @@ def frage_openai(client, modell: str, text: str, bilder: list[tuple[int, bytes]]
     return json.loads(wahl.message.content), {"eingabe": u.prompt_tokens, "ausgabe": u.completion_tokens}
 
 
-def zu_fragensatz(roh: dict) -> dict:
+def zu_fragensatz(roh: dict, erweitert: bool = False) -> dict:
     """JSON aus dem Modell -> Fragensatz im YAML-Format von olatqti.py (immer mit `sektionen`)."""
-    sektionen = [{"titel": s["titel"], "fragen": [_frage(q) for q in s["fragen"]]}
+    sektionen = [{"titel": s["titel"], "fragen": [_frage(q, erweitert) for q in s["fragen"]]}
                  for s in roh["sektionen"] if s["fragen"]]
     satz = {"titel": roh["titel"], "sektionen": sektionen}
     if roh.get("uebersprungen"):
@@ -488,9 +514,32 @@ def _zwischentitel(text: str | None) -> str | None:
     return "".join(absaetze)
 
 
-def _frage(q: dict) -> dict:
+def _norm(absatz: str) -> str:
+    """Absatz ohne Marker, Zeilennummern und Leerraum — zum Vergleichen."""
+    zeilen = [re.sub(r"^\d{1,3}\s+", "", z.strip()) for z in absatz.splitlines()]
+    return " ".join(re.sub(r"[*#]", " ", " ".join(zeilen)).split())
+
+
+def _ohne_doppel(text: str | None) -> str | None:
+    """Entfernt Absätze, deren Text schon in einem anderen Absatz steht — gpt-5.6-luna setzte eine fette
+    Interviewfrage zusätzlich als eigenen Absatz vor die nummerierten Zeilen, die sie schon enthielten (23.09.2026)."""
+    if not text:
+        return text
+    absaetze = [a for a in re.split(r"\n\s*\n", text) if a.strip()]
+    norm = [_norm(a) for a in absaetze]
+    # nur gegen Texte mit Zeilennummern prüfen: ein Titel, der in der Quellenangabe wiederkehrt, bleibt
+    nummeriert = [len(z := a.strip().splitlines()) > 1 and all(re.match(r"\d{1,3}\s", x.strip()) for x in z)
+                  for a in absaetze]
+    weg = {i for i, n in enumerate(norm) if len(n) >= 20 and not nummeriert[i]
+           and any(j != i and nummeriert[j] and n in m for j, m in enumerate(norm))}
+    return "\n\n".join(a for i, a in enumerate(absaetze) if i not in weg)
+
+
+def _frage(q: dict, erweitert: bool = False) -> dict:
     q = _latex_reparieren(q)
-    q["frage"] = _zwischentitel(q.get("frage"))
+    q["frage"] = _ohne_doppel(q.get("frage"))
+    if erweitert:
+        q["frage"] = _zwischentitel(q.get("frage"))
     sauber = _saeubern(q)
     if sauber != q:
         q = sauber

@@ -123,6 +123,15 @@ def main() -> int:
                       ("**Achtung: nur eine richtig.**", "**Achtung: nur eine richtig.**")]:
         if (ist := umwandeln._zwischentitel(ein)) != soll:
             fehler.append(f"_zwischentitel({ein!r}) = {ist!r}")
+    doppelt = ("6 betragen. […]\n\n**Was kann man tun, wenn der Chef so lange schuften lässt?**\n\n"
+               "7 **Was kann man tun, wenn der Chef so lange**\n8 **schuften lässt?**\n9 Das Wichtigste")
+    if "\n\n**Was kann" in umwandeln._ohne_doppel(doppelt) or "7 **Was" not in umwandeln._ohne_doppel(doppelt):
+        fehler.append(f"_ohne_doppel: {umwandeln._ohne_doppel(doppelt)!r}")
+    titel = "### Rechte im Lehrbetrieb: Das müssen Lernende wissen\n\nQuelle: «Rechte im Lehrbetrieb: Das müssen Lernende wissen»."
+    if umwandeln._ohne_doppel(titel) != titel:
+        fehler.append("_ohne_doppel entfernt einen Titel, der in der Quelle wiederkehrt")
+    if umwandeln._ohne_doppel("Kurz.\n\nKurz.") != "Kurz.\n\nKurz.":
+        fehler.append("_ohne_doppel entfernt kurze Absätze")
     pdf_test(fehler)
     referenz_test(fehler)
     demo_test(fehler)
