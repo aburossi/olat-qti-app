@@ -776,7 +776,7 @@ def loesung_kurz(f: dict) -> str:
     if t == "order":
         return " → ".join(f.get("elemente", []))
     if t == "essay":
-        return (f.get("musterloesung") or "— keine Musterlösung —")[:160]
+        return (f.get("musterloesung") or "— keine Musterlösung —")[:400]
     if t == "upload":
         return "— Datei-Abgabe, Bewertung durch Lehrperson —"
-    return f.get("text", "")[:160]
+    return f.get("text", "")[:400]

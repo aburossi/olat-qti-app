@@ -75,7 +75,7 @@ def main() -> int:
     at.run()
     if at.exception:
         fehler.append(f"Absturz nach Übernehmen: {at.exception[0].value}")
-    if not at.dataframe:
+    if not any("olat-fragen" in m.value for m in at.markdown):
         fehler.append("keine Prüftabelle nach dem Einfügen")
     kopf = " ".join(h.value for h in at.subheader)
     if f"{n_fragen} Fragen in {n_sek} Sektionen" not in kopf:

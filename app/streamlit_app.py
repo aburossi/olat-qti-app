@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import html
 import importlib
 import io
 import sys
@@ -58,17 +59,20 @@ if nutzer["rolle"] in zaehler.ADMIN_ROLLEN:
         elif not zeilen:
             st.caption("In diesem Zeitraum wurde noch nichts umgewandelt.")
         else:
-            g1, g2, g3 = st.columns(3)
+            g1, g2, g3, g4 = st.columns(4)
             g1.metric("Umwandlungen total", sum(z["umwandlungen"] for z in zeilen))
-            g2.metric("Kosten total", f"${sum(float(z['kosten_usd']) for z in zeilen):.2f}")
-            g3.metric("Lehrpersonen", len(zeilen))
+            g2.metric("davon PDF / YAML", f"{sum(z['pdf'] for z in zeilen)} / {sum(z['yaml'] for z in zeilen)}")
+            g3.metric("Kosten total", f"${sum(float(z['kosten_usd']) for z in zeilen):.2f}")
+            g4.metric("Lehrpersonen", len(zeilen))
             st.dataframe([{"Lehrperson": z["nutzer"], "Umwandlungen": z["umwandlungen"],
+                           "PDF": z["pdf"], "YAML": z["yaml"],
                            "Kosten": f"${float(z['kosten_usd']):.2f}",
                            "Tokens": f"{z['eingabe'] + z['ausgabe']:,}".replace(",", "'"),
                            "zuletzt": (z["letzte"] or "")[:16].replace("T", " ")} for z in zeilen],
                          width="stretch", hide_index=True)
             st.caption("Gezählt werden nur Zahlen: wer, wann, Modell, Tokens, Kosten, Anzahl Fragen, "
-                       "Seiten und Bilder. Keine Fragetexte, keine PDFs.")
+                       "Seiten und Bilder, sowie ob per PDF (OpenAI) oder YAML (eigene KI) umgewandelt "
+                       "wurde. Keine Fragetexte, keine PDFs.")
 
 MODELL = "gpt-5.6-luna"          # im Vergleich vom 22.09.2026 zuverlässig und am günstigsten
 PROMPT = (Path(__file__).parent / "prompt_extern.md").read_text(encoding="utf-8")
@@ -104,6 +108,27 @@ def neuer_satz(text: str, name: str, verbrauch=None, fehlende_seiten=None,
     st.session_state["bilder"] = bilder or {}          # Dateiname -> Bytes, liegt im Zip unter bilder/
     st.session_state["bilder_ohne_frage"] = ohne_frage or []
     st.session_state.pop("zip", None)
+
+
+def tabelle_mit_umbruch(zeilen: list[dict], breite_spalten: set[str] = frozenset()) -> str:
+    """Fragenübersicht als HTML-Tabelle mit Zeilenumbruch in den Zellen — st.dataframe schneidet lange
+    Titel und Lösungen ab, statt sie umzubrechen (25.09.2026)."""
+    if not zeilen:
+        return "<p><em>Keine Fragen.</em></p>"
+    spalten = list(zeilen[0].keys())
+    kopf = "".join(f"<th>{html.escape(s)}</th>" for s in spalten)
+    zeilen_html = "".join(
+        "<tr>" + "".join(
+            f'<td class="breit">{html.escape(str(z.get(s) or ""))}</td>' if s in breite_spalten
+            else f"<td>{html.escape(str(z.get(s) or ''))}</td>"
+            for s in spalten) + "</tr>"
+        for z in zeilen)
+    return (
+        "<style>.olat-fragen table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }"
+        ".olat-fragen th, .olat-fragen td { border: 1px solid rgba(128, 128, 128, 0.3); padding: 6px 10px; "
+        "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-word; }"
+        ".olat-fragen td.breit { min-width: 240px; } .olat-fragen th { font-weight: 600; }</style>"
+        f'<div class="olat-fragen"><table><thead><tr>{kopf}</tr></thead><tbody>{zeilen_html}</tbody></table></div>')
 
 
 VORLAGE_PDF = Path(__file__).parent.parent / "beispiele" / "Vorlage_Fragetypen_mit_Loesungen.pdf"
@@ -373,13 +398,13 @@ unsicher = [f for f in fragen if f.get("unsicher")]
 if unsicher:
     st.warning(f"{len(unsicher)} Frage(n) mit Unsicherheit — in der Tabelle markiert, bitte prüfen.")
 
-st.dataframe(
+st.markdown(tabelle_mit_umbruch(
     [{"⚠": "⚠" if f.get("unsicher") else "", "Sektion": sek, "Titel": f.get("titel"), "Typ": f.get("typ"),
       "Punkte": f.get("punkte"), "Medien": "🎬 " * len(f.get("medien") or [])
       + "🖼 " * len(f.get("bilder") or []),
       "Lösung": umwandeln.loesung_kurz(f),
       "Quelle": f.get("quelle", ""), "Unsicher": f.get("unsicher", "")} for sek, f in paare],
-    width="stretch", hide_index=True)
+    breite_spalten={"Titel", "Lösung", "Unsicher"}), unsafe_allow_html=True)
 
 if st.session_state.get("bilder"):
     with st.expander("Bilder je Frage ansehen"):
@@ -390,8 +415,61 @@ if st.session_state.get("bilder"):
                     st.image(st.session_state["bilder"][name], width=320,
                              caption=f"{f.get('titel')} — {b.get('alt', '') if isinstance(b, dict) else ''}")
 
+YAML_HILFE = """
+Jede Frage ist ein Block, der mit `- typ:` beginnt und unter `fragen:` eingerückt ist (oder unter
+`sektionen:` → `fragen:`, wenn es mehrere Teile gibt). **Einrücken nur mit Leerzeichen, nie mit Tab**
+— zwei Leerzeichen pro Ebene reichen, und alle Zeilen eines Blocks müssen gleich weit eingerückt sein.
+
+**Text ändern:** den Wert hinter dem Doppelpunkt ersetzen, z. B. `titel: Hauptstadt` →
+`titel: Hauptstadt der Schweiz`. Enthält der Text selbst einen Doppelpunkt oder ein Komma, ihn in
+Anführungszeichen setzen: `titel: "Bern: die Hauptstadt"` — sonst meldet die App ungültiges YAML.
+
+**Punkte ändern:** `punkte: 1` auf die gewünschte Zahl setzen (auch mit Punkt statt Komma: `punkte: 1.5`).
+
+**Richtige Antwort ändern** — bei Single/Multiple Choice, Kprim, Richtig/Falsch: `richtig: true` auf
+die neue richtige Option setzen, bei den bisherigen auf `false` (oder ganz weglassen; bei Multiple
+Choice dürfen mehrere `true` sein):
+```yaml
+antworten:
+  - {text: Bern, richtig: true}
+  - Zürich
+```
+
+**Antwortoption hinzufügen/entfernen:** eine Zeile mit `- ` dazu- oder wegnehmen, gleich eingerückt
+wie die anderen in derselben Liste (`antworten`, `aussagen`, `elemente`, …).
+
+**Frage hinzufügen:** einen ganzen Frageblock kopieren (von `- typ:` bis zur Zeile vor dem nächsten
+`- typ:`), einfügen und Titel/Text/Antworten anpassen. **Frage löschen:** denselben Block ganz entfernen.
+
+Nach jeder Änderung unten **«Übernehmen»** klicken — bei ungültigem YAML meldet die App sofort, wo
+es hakt (meist eine fehlende Einrückung oder ein fehlendes Anführungszeichen), ohne etwas zu verwerfen.
+
+**Felder je Fragetyp (Kurzübersicht):**
+
+| Typ | Felder |
+|---|---|
+| Single / Multiple Choice (`sc` / `mc`) | `antworten: [{text, richtig}]` |
+| Kprim | genau 4 `aussagen: [{text, richtig}]` |
+| Richtig/Falsch (`matchtruefalse`) | `aussagen: [{text, richtig}]` |
+| Matrix / Drag and Drop (`match` / `matchdraganddrop`) | `zeilen`, `spalten`, `loesung: {Zeile: Spalte}` |
+| Reihenfolge (`order`) | `elemente` in der richtigen Reihenfolge |
+| Lückentext (`fib`) | `text` mit `{{Lösung}}`, mehrere Varianten mit `\\|`: `{{Bern\\|Berne}}` |
+| Zahl (`numerical`) | `text` mit `{{#100}}` oder mit Toleranz `{{#100±0.5}}` |
+| Dropdown (`inlinechoice`) | `text` mit `{{*richtig\\|falsch}}` — `*` markiert die richtige Option |
+| Hottext | `text` mit `[[Wort]]`, richtige als `[[*Wort]]` |
+| Freitext (`essay`) | `frage`, dazu `musterloesung` |
+| Upload | `frage` |
+
+Bilder: `bilder: [{datei, alt}]` (Datei liegt im Zip unter `bilder/`). Medien (Video/Audio):
+`medien: ["https://…"]`. Ausführliche Beschreibung mit allen Feldern, Beispielen und Sonderfällen:
+README von olat-qti (`https://github.com/aburossi/olat-qti-app`).
+"""
+
+
 with st.expander("Fragensatz bearbeiten (YAML)"):
-    st.caption("Format: siehe README von olat-qti. Nach dem Ändern «Übernehmen», dann neu bauen.")
+    with st.expander("📖 Wie ändere ich das YAML?"):
+        st.markdown(YAML_HILFE)
+    st.caption("Nach dem Ändern «Übernehmen», dann neu bauen.")
     neu = st.text_area("YAML", st.session_state["yaml"], height=500, label_visibility="collapsed")
     if st.button("Übernehmen") and neu != st.session_state["yaml"]:
         st.session_state["yaml"] = neu

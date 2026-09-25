@@ -52,7 +52,14 @@ bbw-hko-Supabase — wer, wann, Modell, Tokens, Kosten, Fragen/Seiten/Bilder, Qu
 **Nie Inhalte** (keine Fragetexte, keine PDFs). Geschrieben wird mit dem Token der Lehrperson
 (RLS: nur eigene Zeilen), gelesen eigene Zeilen bzw. alle für `kt1`/`reviewer`; die Gesamtsicht
 liefert `public.olat_nutzung(tage)` (security definer mit Rollencheck). Migration
-`olat_umwandlungen_zaehler` vom 22.09.2026. Zählerfehler dürfen die App nie stoppen.
+`olat_umwandlungen_zaehler` vom 22.09.2026, seit Migration `olat_nutzung_quelle_aufschluesselung`
+vom 25.09.2026 zusätzlich mit `pdf`/`yaml`-Spalten (Anzahl je Quelle pro Lehrperson), in der
+Admin-Übersicht in `streamlit_app.py` angezeigt. Zählerfehler dürfen die App nie stoppen.
+
+**Prüftabelle** (`streamlit_app.py`, `tabelle_mit_umbruch()`): eigene HTML-Tabelle statt
+`st.dataframe`, seit 25.09.2026 — `st.dataframe` (glide-data-grid) kann Zellen nicht umbrechen und
+schneidet lange Titel/Lösungen ab. `Titel`, `Lösung` und `Unsicher` sind als breite Spalten markiert;
+`umwandeln.loesung_kurz()` kürzt entsprechend erst bei 400 statt 160 Zeichen.
 
 Login = Microsoft über das Supabase-Projekt von bbw-hko (`app/auth.py`), gleiche Konten und Rollen; Zugang für `lp`, `kt1`, `reviewer`, nicht `gast`.
 Ausnahme: Konten ausserhalb der bbw in `[zugang] gastkonten` (Secrets) — in bbw-hko mit Rolle `gast`,
