@@ -85,8 +85,8 @@ def main() -> int:
         # Fehlerfälle: 404, keine URN, keine mp3, gesperrt
         for antworten, link, stichwort in (
                 ({}, GREDIG, "fehlgeschlagen"),
-                ({"gredig-direkt": b"<html>nichts</html>"}, GREDIG, "keine Audio-URN"),
-                ({URN: json.dumps({"chapterList": [{"urn": URN, "resourceList": []}]}).encode()}, URN, "keine mp3"),
+                ({"gredig-direkt": b"<html>nichts</html>"}, GREDIG, "keine Audio- oder Video-URN"),
+                ({URN: json.dumps({"chapterList": [{"urn": URN, "resourceList": []}]}).encode()}, URN, "keine abspielbare Datei"),
                 ({URN: il(URN, MP3, sperre="GEOBLOCK")}, URN, "gesperrt")):
             try:
                 olatqti.srg_mp3(link, holen=netz(antworten)[0])
@@ -121,6 +121,29 @@ def main() -> int:
         except olatqti.SrgFehler as e:
             if "noch" not in str(e):
                 fehler.append(f"Seite ohne Audio: {e}")
+        # Video (Tagesschau 26.09.2026): ganze Sendung → mp4 SD; Beitrag = Abschnitt → dieselbe Datei mit Startzeit
+        sendung, abschnitt = "urn:srf:video:ssss", "urn:srf:video:bbbb"
+        ts = json.dumps({"show": {"title": "Tagesschau"}, "chapterList": [{
+            "urn": sendung, "title": "Tagesschau vom 26.09.2026", "duration": 1338000,
+            "resourceList": [{"protocol": "HLS", "url": "https://x/m.m3u8"},
+                             {"protocol": "HTTP", "quality": "HD", "mimeType": "video/mp4", "url": "https://x/hd.mp4"},
+                             {"protocol": "HTTP", "quality": "SD", "mimeType": "video/mp4", "url": "https://x/sd.mp4"}],
+            "segmentList": [{"urn": abschnitt, "title": "Bangkok", "markIn": 857000, "markOut": 936000}]}]}).encode()
+        holen = netz({"ssss": ts, "bbbb": ts})[0]
+        ganz_v = olatqti.srg_mp3(f"https://www.srf.ch/play/tv/-/video/-?urn={sendung}", holen=holen)
+        teil_v = olatqti.srg_mp3(f"https://www.srf.ch/play/embed?urn={abschnitt}&subdivisions=false", holen=holen)
+        if (ganz_v["url"], ganz_v["start"], ganz_v["art"]) != ("https://x/sd.mp4", None, "video"):
+            fehler.append(f"Video ganz: {ganz_v}")
+        if (teil_v["url"], teil_v["start"], teil_v["minuten"]) != ("https://x/sd.mp4", 857, 1.3) \
+                or "startet bei 14:17" not in olatqti.srg_beschreibung(teil_v):
+            fehler.append(f"Video-Beitrag: {teil_v}")
+        # Startzeit im Player: 5. Stelle von data-oo-movie (in OLAT geprüft 27.09.2026)
+        for wert, soll in ((30, 30), ("0:30", 30), ("14:17", 857), ("1:02:03", 3723)):
+            if olatqti.sekunden(wert) != soll:
+                fehler.append(f"sekunden({wert!r}) = {olatqti.sekunden(wert)}")
+        el = olatqti.medium({"url": "https://x/sd.mp4", "start": "14:17"}, olatqti.Ids("t"))
+        if ",640,480,'857',0,'video'," not in el.find(olatqti.q("object")).get("data-oo-movie"):
+            fehler.append(f"medium mit start: {el.find(olatqti.q('object')).get('data-oo-movie')}")
         # Erkennen: Seiten ja, mp3 und fremde Links nein
         for url, soll in ((GREDIG, True), (f"https://www.srf.ch/play/tv/x?urn={URN}", True), (MP3, False),
                           ("https://www.youtube.com/watch?v=q2LBfTE6LI0", False), ("https://www.srf.ch/news/x", False)):
@@ -144,6 +167,12 @@ def main() -> int:
         fehler.append(f"srg_links_aufloesen: {s}, {ersetzt}, {fehl}")
     if s["fragen"][0]["frage"] != f"Quelle: {GREDIG}" or s["fragen"][0]["medien"][0].get("breite") != 400:
         fehler.append(f"Fragetext oder Medienangaben verändert: {s['fragen'][0]}")
+    # Video-Beitrag: aus dem Link wird {url: mp4, start: …}
+    vyml = "titel: x\nfragen:\n  - {typ: essay, frage: A, medien: ['https://www.srf.ch/play/tv/-/video/-?urn=urn:srf:video:bbbb']}\n"
+    vneu, _, _ = umwandeln.srg_links_aufloesen(vyml, lambda link: {"url": "https://x/sd.mp4", "titel": "Bangkok",
+                                                                  "minuten": 1.3, "start": 857, "art": "video"})
+    if yaml.safe_load(vneu)["fragen"][0]["medien"] != [{"url": "https://x/sd.mp4", "start": 857}]:
+        fehler.append(f"Video-Beitrag im YAML: {vneu}")
     # ohne SRG-Link: Text Zeichen für Zeichen gleich (auch Kommentare)
     ohne = "# Kommentar\ntitel: x\nfragen:\n  - {typ: essay, frage: A, medien: ['https://youtu.be/x']}\n"
     if umwandeln.srg_links_aufloesen(ohne, aufloesen) != (ohne, [], []):

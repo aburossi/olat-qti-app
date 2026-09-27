@@ -185,6 +185,13 @@ Sendungsseiten wie «Echo der Zeit» gehören zur ganzen Sendung (SRF benennt si
 einen Beitrag mit demselben Titel, nimmt die App den Beitrag (z. B. 3.7 statt 41 Min.) und sagt es; `&partId=…` wählt
 einen bestimmten Beitrag. Seiten ohne Audio (Folge nur angekündigt) ergeben eine Warnung, der Link bleibt.
 Probe-PDF: `beispiele/pdf_srf.py` (Link hinter einem Wort, ausgeschriebener umbrechender Link, Folge ohne Audio).
+**Startzeit** (27.09.2026, in OLAT geprüft mit mp3): `medien: [{url: …, start: 90}]` oder `start: "1:30"` — der Player
+beginnt dort (5. Stelle von `data-oo-movie`, `'30'` und `'00:00:30'` wirken gleich). **Ein Ende gibt es nicht:** die
+6. Stelle («Dauer») ignoriert der Player, `…mp3#t=30,90` lehnt er ab («Unsupported format: 'video' with extension
+'mp3#t=30,90'»). Stoppen nur über eigene Dateien — SRF-Audiobeiträge haben sie (Echo der Zeit: 3:40 in OLAT geprüft).
+**SRF-Video** (27.09.2026, noch nicht in OLAT geprüft): `srf.ch/play/tv/…?urn=urn:srf:video:…` und der Link aus dem
+Einbettungscode (`play/embed?urn=…`) → mp4 (SD, ohne DRM). Ein Tagesschau-Beitrag hat keine eigene Datei, er ist ein
+Abschnitt der Sendung: dann die Sendungsdatei mit `start` = Beginn des Beitrags; er läuft danach weiter.
 **Rückgängig:** Häkchen aus (pro Umwandlung), oder die beiden Commits «SRF-Links …» mit `git revert` zurücknehmen — sie ändern
 nur die SRG-Funktionen in `olatqti.py`/`umwandeln.py`, das Häkchen und `tests/test_srf.py`.
 

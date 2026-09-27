@@ -224,8 +224,10 @@ Schau, WIE im PDF geantwortet wird, nicht nur, was gefragt ist. Das Verb allein 
   eine Frage mit Titel «4a …», «4b …» und passendem Typ; die gemeinsame Angabe in jede dieser Fragen.
 
 VIDEO UND AUDIO
-- Links auf ein YouTube-Video (youtube.com/watch?v=…, youtu.be/…), ein nanoo.tv-Video (nanoo.tv/link/v/…) oder
-  eine mp3-Datei (URL endet auf .mp3) kommen in `medien` — OLAT bettet sie als Player ein. Die URL vollständig
+- Links auf ein YouTube-Video (youtube.com/watch?v=…, youtu.be/…), ein nanoo.tv-Video (nanoo.tv/link/v/…),
+  eine mp3-Datei (URL endet auf .mp3) oder einen SRF-Beitrag (srf.ch/play/…, srf.ch/audio/…, auch der Link aus
+  einem SRF-Einbettungscode «<iframe src="https://www.srf.ch/play/embed?urn=…">») kommen in `medien` — OLAT bettet
+  sie als Player ein (SRF-Links macht die App selbst abspielbar). Die URL vollständig
   und unverändert übernehmen, den Link-Text weglassen (z. B. «Video: https://…» oder «Hören Sie hier»).
 - WOHIN, entscheidet, worauf sich die Fragen beziehen — NICHT, wo der Link im PDF steht:
   · Sagt das PDF, dass sich ein ganzer Teil auf das Video bezieht («Die Fragen in Teil A beziehen sich darauf»,
@@ -984,14 +986,23 @@ def srg_links_aufloesen(text: str, aufloesen) -> tuple[str, list[dict], list[str
         except Exception as e:  # Netz, gesperrt, keine mp3 — der Link bleibt, die Lehrperson sieht es
             fehler.append(f"{url}: {e}")
             continue
-        neu[url] = fund["url"]
+        neu[url] = fund
         ersetzt.append({"alt": url, **fund})
     if not neu:
         return text, ersetzt, fehler
+
+    def ersetzen(m):
+        url = m.get("url") if isinstance(m, dict) else m
+        if url not in neu:
+            return m
+        fund = neu[url]
+        eintrag = {**m, "url": fund["url"]} if isinstance(m, dict) else {"url": fund["url"]}
+        if fund.get("start") and "start" not in eintrag:  # Video-Beitrag in der Sendungsdatei: dort beginnen
+            eintrag["start"] = fund["start"]
+        return eintrag if len(eintrag) > 1 or isinstance(m, dict) else eintrag["url"]
     for x in _traeger(satz):
         if x.get("medien"):
-            x["medien"] = [{**m, "url": neu.get(m.get("url"), m.get("url"))} if isinstance(m, dict)
-                           else neu.get(m, m) for m in x["medien"]]
+            x["medien"] = [ersetzen(m) for m in x["medien"]]
     return als_yaml(satz), ersetzt, fehler
 
 

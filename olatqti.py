@@ -238,15 +238,33 @@ def anhaengen(el: ET.Element, text: str) -> None:
         el.append(kind)
 
 
+def sekunden(wert) -> int:
+    """Startzeit: 30, «30», «0:30» oder «1:02:30» → Sekunden."""
+    if isinstance(wert, (int, float)) and not isinstance(wert, bool) and wert >= 0:
+        return int(wert)
+    m = re.fullmatch(r"\s*(?:(\d+):)?(?:(\d+):)?(\d+)\s*", str(wert))
+    if not m:
+        raise FehlerImFragensatz(f"start: «{wert}» — Sekunden (90) oder Minuten:Sekunden (1:30) angeben")
+    teile = [int(x) for x in m.groups() if x is not None]
+    s = 0
+    for t in teile:
+        s = s * 60 + t
+    return s
+
+
 def medium(m, ids) -> ET.Element:
     """Video oder Audio per URL, so wie es OpenOlats «Medien einfügen» schreibt.
-    Auch mp3 läuft als type="video" — OLAT hat nur den einen Player."""
+    Auch mp3 läuft als type="video" — OLAT hat nur den einen Player.
+    `start` (Sekunden oder «m:ss») steht an der 5. Stelle von data-oo-movie: in OLAT geprüft 27.09.2026 mit mp3,
+    beginnt dort. Ein Ende gibt es nicht — die 6. Stelle («Dauer») ignoriert der Player, «…mp3#t=30,90» lehnt er ab
+    («Unsupported format»)."""
     if isinstance(m, str):
         m = {"url": m}
     url, b, h = str(m["url"]), int(m.get("breite", 640)), int(m.get("hoehe", 480))
+    start = f"'{sekunden(m['start'])}'" if m.get("start") not in (None, "", 0) else "''"
     vid = f"olatFlashMovieViewer{int(ids('', 12), 16) % 900000 + 100000}"
     # der Rest von data-oo-movie ist alte Flowplayer-Konfiguration, unverändert übernommen
-    oo = f"'{url}','{vid}',{b},{h},'',0,'video','',false,false,true,''"
+    oo = f"'{url}','{vid}',{b},{h},{start},0,'video','',false,false,true,''"
     return E("p", None, E("object", {"id": vid, "class": "olatFlashMovieViewer", "data": url, "type": "video",
                                      "width": b, "height": h, "data-oo-movie": oo}, text=" "))
 
@@ -1276,7 +1294,7 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
 # Der OLAT-Player spielt SRF-Play- und SRF-Audio-Seiten nicht (HTML), die mp3 dahinter schon (27.09.2026 in OLAT
 # geprüft). Weg zur mp3: URN aus dem Link oder aus der Seite → Integration Layer der SRG → Kapitel mit dieser URN →
 # Datei mit Protokoll HTTPS und Encoding MP3. Nur Standardbibliothek (urllib).
-SRG_URN = re.compile(r"urn:(?:srf|rts|rsi|rtr|swi):audio:[A-Za-z0-9_-]+")
+SRG_URN = re.compile(r"urn:(?:srf|rts|rsi|rtr|swi):(?:audio|video):[A-Za-z0-9_-]+")
 SRG_SEITE = re.compile(r"https?://(?:www\.)?(?:srf|rts|rsi|rtr|swissinfo)\.ch/(?:play|audio)/\S+", re.I)
 SRG_IL = "https://il.srgssr.ch/integrationlayer/2.0/mediaComposition/byUrn/{urn}.json"
 
@@ -1293,27 +1311,39 @@ def _holen(url: str, zeit: float = 10.0) -> bytes:
 
 def ist_srg_seite(url: str) -> bool:
     """SRF/RTS/RSI/RTR-Seite oder -Player-Link (keine direkte Mediendatei)."""
-    return bool(SRG_SEITE.fullmatch(str(url).strip())) and not str(url).lower().split("?")[0].endswith(".mp3")
+    pfad = str(url).lower().split("?")[0]
+    return bool(SRG_SEITE.fullmatch(str(url).strip())) and not pfad.endswith((".mp3", ".mp4"))
 
 
-def _mp3(kapitel: dict) -> str | None:
-    return next((r["url"] for r in kapitel.get("resourceList", [])
-                 if r.get("protocol") == "HTTPS" and r.get("encoding") == "MP3" and r.get("url")), None)
+def _datei(kapitel: dict) -> str | None:
+    """Direkt abspielbare Datei eines Kapitels: Audio → HTTPS/MP3; Video → mp4 über HTTPS, SD vor HD
+    (Tagesschau 26.09.2026: SD 218 MB, HD 1 GB — für eine Klasse im Schulnetz reicht SD)."""
+    quellen = kapitel.get("resourceList", [])
+    mp3 = [r["url"] for r in quellen if r.get("protocol") == "HTTPS" and r.get("encoding") == "MP3" and r.get("url")]
+    if mp3:
+        return mp3[0]
+    mp4 = [r for r in quellen if str(r.get("url", "")).startswith("https://") and not r.get("drmList")
+           and (r.get("mimeType") == "video/mp4" or str(r.get("url", "")).split("?")[0].endswith(".mp4"))]
+    mp4.sort(key=lambda r: {"SD": 0, "HQ": 1, "HD": 2}.get(r.get("quality"), 3))
+    return mp4[0]["url"] if mp4 else None
 
 
-def _minuten(kapitel: dict) -> float:
-    return round((kapitel.get("duration") or 0) / 60000, 1)
+def _minuten(ms) -> float:
+    return round((ms or 0) / 60000, 1)
 
 
 def srg_mp3(link: str, holen=_holen) -> dict:
-    """mp3 zu einem SRG-Audio: `link` ist eine URN, ein Play-Link mit ?urn=…, eine Audio-Seite mit ?id=AUDI…
-    oder ein Beitrags-Link mit &partId=…. Gibt {url, titel, minuten, urn, sendung, sendung_minuten} zurück;
-    `sendung` ist gesetzt, wenn ein einzelner Beitrag aus einer Sendung gewählt wurde. SrgFehler, wenn es nicht
-    geht (Netz, kein Audio, keine mp3, gesperrt). `holen` lässt sich im Test ersetzen.
+    """Abspielbare Datei zu einem SRG-Audio oder -Video (Name aus der Zeit, als es nur Audio gab).
+    `link`: URN, Play-Link mit ?urn=…, Audio-Seite mit ?id=AUDI…, Beitrags-Link mit &partId=….
+    Gibt {url, titel, minuten, urn, art, start, sendung, sendung_minuten} zurück; `start` (Sekunden) ist gesetzt,
+    wenn ein Beitrag keine eigene Datei hat und in der Datei der Sendung beginnt (Video-Beiträge der Tagesschau).
+    SrgFehler, wenn es nicht geht (Netz, kein Medium, keine Datei, gesperrt). `holen` lässt sich im Test ersetzen.
 
     Sendungsseiten wie «Echo der Zeit» (27.09.2026): Die Seite gehört zur ganzen Sendung (41 Min.), die SRF nach
     ihrem ersten Beitrag benennt; der Beitrag selbst ist ein eigenes Kapitel mit demselben Titel (3.7 Min.).
-    Gibt es ein solches Kapitel, gilt der Beitrag — so, wie die Lehrperson die Seite gesehen hat."""
+    Gibt es ein solches Kapitel, gilt der Beitrag — so, wie die Lehrperson die Seite gesehen hat.
+    Video-Beiträge (Tagesschau) sind dagegen nur Abschnitte (segmentList, markIn/markOut) der Sendungsdatei:
+    dann die Datei der Sendung mit Startzeit — ein Ende kann der OLAT-Player nicht (in OLAT geprüft 27.09.2026)."""
     import json
     from urllib.error import URLError
     from urllib.parse import parse_qs, unquote, urlparse
@@ -1335,13 +1365,24 @@ def srg_mp3(link: str, holen=_holen) -> dict:
                     raise SrgFehler("die Seite hat (noch) kein abspielbares Audio — die Folge ist angekündigt oder "
                                     "lief nur im Radio und ist noch nicht online; später erneut versuchen")
         if not kandidaten:
-            raise SrgFehler(f"keine Audio-URN gefunden in {link}")
+            raise SrgFehler(f"keine Audio- oder Video-URN gefunden in {link}")
         funde = []
         for urn in kandidaten[:5]:
             daten = json.loads(holen(SRG_IL.format(urn=urn)))
             kapitel = daten.get("chapterList", [])
+            sendung = (daten.get("show") or {}).get("title") or "der Sendung"
+            art = "video" if ":video:" in urn else "audio"
             haupt = next((k for k in kapitel if k.get("urn") == urn), None)
-            if not haupt:
+            if not haupt:  # Beitrag ohne eigene Datei: Abschnitt eines Kapitels
+                for k in kapitel:
+                    abschnitt = next((s for s in k.get("segmentList") or [] if s.get("urn") == urn), None)
+                    if abschnitt and (url := _datei(k)):
+                        funde.append({"url": url, "titel": abschnitt.get("title", ""), "urn": urn, "art": art,
+                                      "minuten": _minuten((abschnitt.get("markOut") or 0) - (abschnitt.get("markIn") or 0)),
+                                      "start": round((abschnitt.get("markIn") or 0) / 1000),
+                                      "gesperrt": abschnitt.get("blockReason") or k.get("blockReason"),
+                                      "sendung": sendung, "sendung_minuten": _minuten(k.get("duration"))})
+                        break
                 continue
             wahl = haupt
             if teil:
@@ -1350,12 +1391,12 @@ def srg_mp3(link: str, holen=_holen) -> dict:
                 beitrag = [k for k in kapitel if k is not haupt and k.get("title") == haupt.get("title")
                            and (k.get("duration") or 0) < (haupt.get("duration") or 0)]
                 wahl = beitrag[0] if beitrag else haupt
-            if (url := _mp3(wahl)):
-                sendung = (daten.get("show") or {}).get("title") or "der Sendung"
-                funde.append({"url": url, "titel": wahl.get("title", ""), "urn": wahl.get("urn"),
-                              "minuten": _minuten(wahl), "gesperrt": wahl.get("blockReason"),
+            if (url := _datei(wahl)):
+                funde.append({"url": url, "titel": wahl.get("title", ""), "urn": wahl.get("urn"), "art": art,
+                              "minuten": _minuten(wahl.get("duration")), "start": None,
+                              "gesperrt": wahl.get("blockReason"),
                               "sendung": sendung if wahl is not haupt else None,
-                              "sendung_minuten": _minuten(haupt) if wahl is not haupt else None})
+                              "sendung_minuten": _minuten(haupt.get("duration")) if wahl is not haupt else None})
     except SrgFehler:
         raise
     except (URLError, OSError, ValueError, KeyError) as e:
@@ -1365,7 +1406,7 @@ def srg_mp3(link: str, holen=_holen) -> dict:
     elif not merkmal and len(funde) > 1 and not SRG_URN.fullmatch(link):
         raise SrgFehler(f"mehrere Beiträge auf {link} — Link zum einzelnen Beitrag verwenden")
     if not funde:
-        raise SrgFehler(f"keine mp3 gefunden für {link}")
+        raise SrgFehler(f"keine abspielbare Datei gefunden für {link}")
     if funde[0]["gesperrt"]:
         raise SrgFehler(f"«{funde[0]['titel']}» ist gesperrt ({funde[0]['gesperrt']})")
     return funde[0]
@@ -1373,9 +1414,15 @@ def srg_mp3(link: str, holen=_holen) -> dict:
 
 def srg_beschreibung(fund: dict) -> str:
     """«Titel» (3.7 Min., Beitrag aus «Echo der Zeit», ganze Sendung 41.1 Min.) — für Meldungen."""
-    zusatz = (f", Beitrag aus «{fund['sendung']}», ganze Sendung {fund['sendung_minuten']:g} Min."
-              if fund.get("sendung") else "")
-    return f"«{fund['titel']}» ({fund['minuten']:g} Min.{zusatz})"
+    zusatz = ""
+    if fund.get("sendung") and fund.get("start") is not None:
+        m, s = divmod(int(fund["start"]), 60)
+        zusatz = (f", Beitrag aus «{fund['sendung']}» — startet bei {m}:{s:02d}, läuft danach weiter "
+                  f"(ganze Sendung {fund['sendung_minuten']:g} Min.)")
+    elif fund.get("sendung"):
+        zusatz = f", Beitrag aus «{fund['sendung']}», ganze Sendung {fund['sendung_minuten']:g} Min."
+    art = "Video, " if fund.get("art") == "video" else ""
+    return f"«{fund['titel']}» ({art}{fund['minuten']:g} Min.{zusatz})"
 
 
 # --------------------------------------------------------------- Prüfung
@@ -1458,7 +1505,7 @@ def main(argv=None):
         except SrgFehler as e:
             print(f"FEHLER: {e}", file=sys.stderr)
             return 1
-        print(fund["url"])
+        print(fund["url"] + (f"   (start: {fund['start']})" if fund.get("start") else ""))
         print(f"  {srg_beschreibung(fund)}, {fund['urn']}", file=sys.stderr)
         return 0
     if a.befehl == "build":
