@@ -52,7 +52,11 @@ FRAGE = {
         "laenge": {"type": ["integer", "null"]},  # Breite der Textlücken, wenn ein Satz hineingehört
         "elemente": _nullbar(_LISTE),
         "antwortzeilen": {"type": ["integer", "null"]},
-        "medien": _nullbar(_LISTE),
+        # Medien mit optionalem Zeitbereich (27.09.2026): «(0:30–1:30)» neben dem Link → start/ende
+        "medien": _nullbar({"type": "array", "items": {
+            "type": "object", "additionalProperties": False, "required": ["url", "start", "ende"],
+            "properties": {"url": {"type": "string"}, "start": {"type": ["string", "null"]},
+                           "ende": {"type": ["string", "null"]}}}}),
         "bilder": _nullbar({"type": "array", "items": {
             "type": "object", "additionalProperties": False, "required": ["datei", "alt"],
             "properties": {"datei": {"type": "string"}, "alt": {"type": "string"}}}}),
@@ -226,8 +230,8 @@ Schau, WIE im PDF geantwortet wird, nicht nur, was gefragt ist. Das Verb allein 
 VIDEO UND AUDIO
 - Links auf ein YouTube-Video (youtube.com/watch?v=…, youtu.be/…), ein nanoo.tv-Video (nanoo.tv/link/v/…),
   eine mp3-Datei (URL endet auf .mp3) oder einen SRF-Beitrag (srf.ch/play/…, srf.ch/audio/…, auch der Link aus
-  einem SRF-Einbettungscode «<iframe src="https://www.srf.ch/play/embed?urn=…">») kommen in `medien` — OLAT bettet
-  sie als Player ein (SRF-Links macht die App selbst abspielbar). Die URL vollständig
+  einem SRF-Einbettungscode «<iframe src="https://www.srf.ch/play/embed?urn=…">» — dann nur die URL aus src="…")
+  kommen in `medien` als {url, start, ende} — OLAT bettet sie als Player ein. Die URL vollständig
   und unverändert übernehmen, den Link-Text weglassen (z. B. «Video: https://…» oder «Hören Sie hier»).
 - WOHIN, entscheidet, worauf sich die Fragen beziehen — NICHT, wo der Link im PDF steht:
   · Sagt das PDF, dass sich ein ganzer Teil auf das Video bezieht («Die Fragen in Teil A beziehen sich darauf»,
@@ -237,8 +241,13 @@ VIDEO UND AUDIO
   · In anderen Teilen: in `medien` JEDER Frage, die ausdrücklich auf das Video verweist («Das Beispiel aus dem
     Video», «Das Video fragt …») — auch wenn der Link dort nicht noch einmal steht.
   · Braucht nur eine einzige Frage das Video: in `medien` dieser Frage.
+  · Haben verschiedene Aufgaben je ihren EIGENEN Link oder Ausschnitt (andere URL oder andere Zeiten), gehört jeder
+    zu seiner Aufgabe — nie mehrere solche Links an die Sektion, sonst stünden alle Player über jeder Frage. An die
+    Sektion kommt nur EIN Medium, für das der Teil ausdrücklich gilt.
 - Links, die im PDF hinter einem Wort liegen, stehen am Seitenende unter «Links auf dieser Seite»
   mit dem Wort, hinter dem sie liegen — so ordnest du sie der richtigen Frage zu.
+- Steht beim Link ein Zeitbereich («0:30–1:30», «von 2:10 bis 3:00», «ab 1:45»), `start` und `ende` als «m:ss»
+  setzen (bei «ab …» nur `start`); ohne Zeitangabe beide null. Den Zeitbereich nicht zusätzlich im Fragetext lassen.
 - Andere Links (Webseiten, Dokumente) nicht in `medien`, sondern im Fragetext lassen.
 - Keine Medien-Links erfinden; ohne Link `medien` = null.
 
@@ -786,6 +795,25 @@ def _ohne_rot(o):
     return o
 
 
+def _medien(liste) -> list:
+    """Medien vom Modell ({url, start, ende}) → YAML: ohne Zeiten nur der Link, sonst {url, start, ende}.
+    Nimmt auch schon fertige Einträge (Text oder dict) an."""
+    out = []
+    for m in liste or []:
+        if isinstance(m, str):
+            out.append(m)
+            continue
+        eintrag = {"url": m.get("url")} | {k: m[k] for k in ("start", "ende") if m.get(k) not in (None, "")}
+        if eintrag["url"]:
+            out.append(eintrag if len(eintrag) > 1 else eintrag["url"])
+    return out
+
+
+def medien_url(m) -> str | None:
+    """Link eines Medien-Eintrags: Text, {url: …} oder {srf: …}."""
+    return m if isinstance(m, str) else (m.get("url") or m.get("srf")) if isinstance(m, dict) else None
+
+
 def _zeilen_behalten(absatz: str) -> str:
     """Jede Zeile eines Lückentext-Absatzes endet mit « \\» (Zeilenumbruch in olatqti), ausser der letzten."""
     zeilen = [z.rstrip() for z in absatz.strip().split("\n") if z.strip()]
@@ -800,7 +828,7 @@ def _sektion(s: dict, erweitert: bool = False) -> dict:
     if text and text.strip():
         sek["text"] = _zwischentitel(text) if erweitert else text
     if s.get("medien"):
-        sek["medien"] = s["medien"]
+        sek["medien"] = _medien(s["medien"])
     if s.get("bilder"):
         sek["bilder"] = [{"datei": f"bilder/{b['datei']}", "alt": b["alt"]} for b in s["bilder"]]
     sek["fragen"] = [_frage(q, erweitert) for q in s["fragen"]]
@@ -878,7 +906,7 @@ def _frage(q: dict, erweitert: bool = False) -> dict:
     if q.get("bilder"):
         f["bilder"] = [{"datei": f"bilder/{b['datei']}", "alt": b["alt"]} for b in q["bilder"]]
     if q.get("medien"):
-        f["medien"] = q["medien"]
+        f["medien"] = _medien(q["medien"])
     for feld in ("quelle", "unsicher"):
         if q.get(feld):
             f[feld] = q[feld]
@@ -960,12 +988,12 @@ def nicht_uebernommen(pdf_text: str, satz: dict, min_woerter: int = 7) -> list[s
     return fehlt
 
 
-def srg_links_aufloesen(text: str, aufloesen) -> tuple[str, list[dict], list[str]]:
-    """SRF/SRG-Seiten in `medien:` (Sektionen und Fragen) durch ihre mp3 ersetzen — der OLAT-Player spielt nur die
-    mp3 (27.09.2026). `aufloesen(link)` → {url, titel, minuten, …} oder Ausnahme (olatqti.srg_mp3).
-    Nur in `medien:` — ein Link im Fragetext (Quellenangabe) bleibt. Ohne SRG-Link bleibt der Text Zeichen für
-    Zeichen gleich; sonst wird er neu geschrieben (Kommentare gehen dabei verloren). Gibt (Text, ersetzt, Fehler)
-    zurück; ein Link, der nicht geht, bleibt stehen und kommt in die Fehlerliste."""
+def srg_einbetten(text: str) -> tuple[str, list[str], list[str]]:
+    """SRF/SRG-Links in `medien:` → `{srf: …}`: der SRF-Player wird eingebettet und spielt einen Beitrag genau von
+    Anfang bis Ende (in OLAT geprüft 27.09.2026). Offline — die URN steht im Einbettungs- oder Play-Link. Eine
+    Audio-Seite ohne URN (srf.ch/audio/…?id=…) bleibt und kommt in die Hinweise: dafür braucht es den
+    Einbettungslink. Nichts wird heruntergeladen. Gibt (Text, eingebettet, Hinweise) zurück; ohne SRF-Link bleibt
+    der Text Zeichen für Zeichen gleich."""
     try:
         satz = yaml.safe_load(text)
     except yaml.YAMLError:
@@ -973,37 +1001,24 @@ def srg_links_aufloesen(text: str, aufloesen) -> tuple[str, list[dict], list[str
     if not isinstance(satz, dict):
         return text, [], []
     import olatqti  # liegt neben app/; die App lädt es bei jedem Lauf neu
-    links = []
+    eingebettet, hinweise, geaendert = [], [], False
     for x in _traeger(satz):
+        neu = []
         for m in x.get("medien") or []:
-            url = m.get("url") if isinstance(m, dict) else m
-            if isinstance(url, str) and olatqti.ist_srg_seite(url) and url not in links:
-                links.append(url)
-    ersetzt, fehler, neu = [], [], {}
-    for url in links:
-        try:
-            fund = aufloesen(url)
-        except Exception as e:  # Netz, gesperrt, keine mp3 — der Link bleibt, die Lehrperson sieht es
-            fehler.append(f"{url}: {e}")
-            continue
-        neu[url] = fund
-        ersetzt.append({"alt": url, **fund})
-    if not neu:
-        return text, ersetzt, fehler
-
-    def ersetzen(m):
-        url = m.get("url") if isinstance(m, dict) else m
-        if url not in neu:
-            return m
-        fund = neu[url]
-        eintrag = {**m, "url": fund["url"]} if isinstance(m, dict) else {"url": fund["url"]}
-        if fund.get("start") and "start" not in eintrag:  # Video-Beitrag in der Sendungsdatei: dort beginnen
-            eintrag["start"] = fund["start"]
-        return eintrag if len(eintrag) > 1 or isinstance(m, dict) else eintrag["url"]
-    for x in _traeger(satz):
+            url = m if isinstance(m, str) else m.get("url") if isinstance(m, dict) else None
+            if isinstance(url, str) and olatqti.ist_srg_seite(url):
+                if olatqti.srg_urn(url):
+                    rest = {k: v for k, v in m.items() if k != "url"} if isinstance(m, dict) else {}
+                    neu.append({"srf": url, **rest})
+                    eingebettet.append(url)
+                    geaendert = True
+                    continue
+                if url not in hinweise:
+                    hinweise.append(url)
+            neu.append(m)
         if x.get("medien"):
-            x["medien"] = [ersetzen(m) for m in x["medien"]]
-    return als_yaml(satz), ersetzt, fehler
+            x["medien"] = neu
+    return (als_yaml(satz) if geaendert else text), eingebettet, hinweise
 
 
 VERWEIS_MEDIUM = re.compile(r"\b(Video|Film|Clip|Audio|Hörbeitrag|Podcast)", re.I)
@@ -1014,16 +1029,16 @@ def medien_verteilen(satz: dict) -> int:
     weder selbst noch über ihre Sektionseinleitung zeigt. Das Modell setzt den Link nur dort, wo er im PDF
     steht, nicht bei «Das Beispiel aus dem Video» in einem späteren Teil (Ideale-Gase-PDF, 27.09.2026).
     Bei mehreren Links bleibt alles, wie es ist — dann wäre die Zuordnung geraten. Gibt die Anzahl zurück."""
-    urls = {u for x in _traeger(satz) for u in x.get("medien") or [] if isinstance(u, str)}
+    urls = {medien_url(u) for x in _traeger(satz) for u in x.get("medien") or [] if medien_url(u)}
     if len(urls) != 1:
         return 0
     url, dazu = urls.pop(), 0
     teile = satz["teile"] if "teile" in satz else [satz]
     for sek in (s for t in teile or [] for s in sektionen_von(t)):
-        if url in (sek.get("medien") or []):
+        if url in {medien_url(m) for m in sek.get("medien") or []}:
             continue
         for f in sek.get("fragen") or []:
-            if url not in (f.get("medien") or []) and VERWEIS_MEDIUM.search(f"{f.get('frage') or ''} {f.get('text') or ''}"):
+            if url not in {medien_url(m) for m in f.get("medien") or []} and VERWEIS_MEDIUM.search(f"{f.get('frage') or ''} {f.get('text') or ''}"):
                 f["medien"] = [*(f.get("medien") or []), url]
                 dazu += 1
     return dazu
@@ -1034,7 +1049,7 @@ def pruefe_medien(satz: dict, pdf_text: str) -> int:
     brechen im PDF um — verglichen wird darum auch mit dem Text ohne Leerraum (27.09.2026, SRF-Links)."""
     markiert, ohne_leerraum = 0, re.sub(r"\s+", "", pdf_text)
     for f in _traeger(satz):
-        fremd = [u for u in f.get("medien") or [] if isinstance(u, str)
+        fremd = [u for u in (medien_url(m) for m in f.get("medien") or []) if isinstance(u, str)
                  and u not in pdf_text and re.sub(r"\s+", "", u) not in ohne_leerraum]
         if fremd:
             hinweis = f"Medien-Link steht so nicht im PDF: {', '.join(fremd)}"

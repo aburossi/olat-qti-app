@@ -167,33 +167,33 @@ formulierte Antwort trifft sie nie — solche Lücken von Hand bewerten. Zahl-L�
 Antworten»: die Optionen stehen zusätzlich in jedem Dropdown der Frage (`templateDeclaration`).
 Zeilenumbruch in Lückentext und Hottext wie überall: Zeile mit `\` beenden.
 
-**Medien, bei jedem Typ:** `medien: [URL, …]` oder `[{url, breite, hoehe}]` (Std. 640×480).
-YouTube-, nanoo.tv- (in OLAT getestet 22.09.2026) und mp3-Links erscheinen nach dem Fragetext im OLAT-Player — dasselbe
-Markup wie «Medien einfügen» im OLAT-Editor (`olatFlashMovieViewer`, auch Audio als
-`type="video"`). Nur verlinkt, nicht ins Paket kopiert.
-**SRF-Audio** (27.09.2026 in OLAT geprüft): `srf.ch/play/embed?urn=…` spielt der Player **nicht** (HTML-Seite). Die mp3
-über die URN holen: `https://il.srgssr.ch/integrationlayer/2.0/mediaComposition/byUrn/<urn>.json` → in `chapterList`
-das Kapitel mit genau dieser URN → `resourceList[].url` mit Protokoll HTTPS und Encoding MP3 (z. B.
-`https://download-media.srf.ch/world/audio/Rendez-vous_radio/2026/09/….mp3`) — das spielt, auch an der Sektion.
-Das macht **`python olatqti.py srf-mp3 <Link oder URN>`** (27.09.2026, nur Standardbibliothek): nimmt eine URN, einen
-Play-Link mit `?urn=…` oder eine Audio-Seite `srf.ch/audio/…?id=AUDI…` — dort steht die URN nur im HTML der Seite
-(die `AUDI…`-ID selbst kennt die Schnittstelle nicht); bei mehreren Beiträgen auf einer Seite gilt der, dessen mp3 die
-ID im Namen trägt. Gibt die mp3-URL aus (Titel und Dauer auf stderr). **Die App** ersetzt SRF/SRG-Seiten in `medien:`
-beim Bauen automatisch (Häkchen «SRF-Links in abspielbare mp3 umwandeln», Standard an; Links im Fragetext bleiben).
-Test `tests/test_srf.py` (ohne Netz), `tests/test_srf.py --live` gegen den Beitrag «Gredig direkt» vom 25.09.2026.
-Sendungsseiten wie «Echo der Zeit» gehören zur ganzen Sendung (SRF benennt sie nach dem ersten Beitrag); gibt es darin
-einen Beitrag mit demselben Titel, nimmt die App den Beitrag (z. B. 3.7 statt 41 Min.) und sagt es; `&partId=…` wählt
-einen bestimmten Beitrag. Seiten ohne Audio (Folge nur angekündigt) ergeben eine Warnung, der Link bleibt.
-Probe-PDF: `beispiele/pdf_srf.py` (Link hinter einem Wort, ausgeschriebener umbrechender Link, Folge ohne Audio).
-**Startzeit** (27.09.2026, in OLAT geprüft mit mp3): `medien: [{url: …, start: 90}]` oder `start: "1:30"` — der Player
-beginnt dort (5. Stelle von `data-oo-movie`, `'30'` und `'00:00:30'` wirken gleich). **Ein Ende gibt es nicht:** die
-6. Stelle («Dauer») ignoriert der Player, `…mp3#t=30,90` lehnt er ab («Unsupported format: 'video' with extension
-'mp3#t=30,90'»). Stoppen nur über eigene Dateien — SRF-Audiobeiträge haben sie (Echo der Zeit: 3:40 in OLAT geprüft).
-**SRF-Video** (27.09.2026, noch nicht in OLAT geprüft): `srf.ch/play/tv/…?urn=urn:srf:video:…` und der Link aus dem
-Einbettungscode (`play/embed?urn=…`) → mp4 (SD, ohne DRM). Ein Tagesschau-Beitrag hat keine eigene Datei, er ist ein
-Abschnitt der Sendung: dann die Sendungsdatei mit `start` = Beginn des Beitrags; er läuft danach weiter.
-**Rückgängig:** Häkchen aus (pro Umwandlung), oder die beiden Commits «SRF-Links …» mit `git revert` zurücknehmen — sie ändern
-nur die SRG-Funktionen in `olatqti.py`/`umwandeln.py`, das Häkchen und `tests/test_srf.py`.
+**Medien, bei jedem Typ** — nur verlinkt oder eingebettet, **nie heruntergeladen** (Entscheid 27.09.2026). Alles
+unten in OLAT geprüft am 27.09.2026 (Probe-Zips, `ausgabe/2026-09-27_gesamtprobe-medien.zip`, YouTube-Probe Y1–Y6):
+
+| Form im YAML | Player in OLAT | Start | Ende |
+|---|---|---|---|
+| `medien: [URL]` oder `[{url, breite, hoehe}]` (YouTube, nanoo.tv, mp3) | OLAT-Player (`olatFlashMovieViewer`, wie «Medien einfügen»; Std. 640×480) | `start` wirkt bei mp3, **nicht** bei YouTube | nie |
+| `[{url: <YouTube>, start: "0:30", ende: "1:30"}]` | YouTube-Player `youtube-nocookie.com/embed/…?start=&end=` | ✓ | ✓ — **nur beide zusammen** (nur `start`: spielte nicht, Y5) |
+| `[{srf: <Einbettungslink, Play-Link mit urn=… oder URN>}]` — auch ein SRF-Link unter `url:` | SRG-Player `play/embed?urn=…&subdivisions=false` | ein **Beitrag** (eigene URN) spielt genau von Anfang bis Ende; `start` → `startTime` | nur als Beitragsende; ein eigenes Ende kennt der SRG-Player nicht |
+
+Eingebettete Player (YouTube, SRG) stehen als `<object type="text/html">` im Fragetext oder in der Einleitung der
+Sektion — gültiges QTI. Nicht gegangen: `<iframe>` (OLAT verwirft die ganze Frage), SRF-Seiten im OLAT-Player
+(Fehler), `…mp3#t=30,90` (OLAT: «Unsupported format»), Dauer/Ende über die Parameter des OLAT-Players (ignoriert),
+mp3/mp4 als `<object>` mit Browser-Player (bleibt leer). Der SRG-Player liest nur `urn`, `startTime`, `autoPlay`,
+`subdivisions` (aus seinem Code). Zeiten: Sekunden (`90`) oder `m:ss` / `h:mm:ss`. Was nicht geht, meldet der Konverter
+(Ende bei mp3/SRF, Start ohne Ende bei YouTube, SRF-Audio-Seite ohne URN).
+
+**SRF: welcher Link.** Die URN (`urn:srf:video:…`, `urn:srf:audio:…`) muss im Link stehen: Einbettungslink (auf SRF
+«Teilen → Einbetten», Adresse aus `src="…"`) oder Play-Link mit `urn=…`. Eine Audio-Seite `srf.ch/audio/…?id=AUDI…`
+hat keine — die App fragt SRF nicht ab (Streamlit-Server werden teils blockiert) und meldet den Link. Lokal findet
+`python olatqti.py srf-einbetten <Link>` den Einbettungslink (lädt nur die Seite und SRG-Metadaten, keine Mediendatei;
+bei Sendungsseiten wie «Echo der Zeit» den Beitrag mit demselben Titel statt der ganzen Sendung).
+**Die App** macht aus SRF-Links in `medien:` den SRG-Player (`umwandeln.srg_einbetten()`, offline); das Modell
+übernimmt Zeitbereiche aus dem PDF («(0:30–1:30)», «ab 2:10») als `start`/`ende`. Anleitung für Lehrpersonen:
+`MEDIEN_HILFE` in `streamlit_app.py`. Grenzen, die die App nennt: SRF entscheidet, was eingebettet werden darf,
+wie lange es verfügbar ist und ob es ausserhalb der Schweiz läuft; im Safe Exam Browser müssen `srf.ch` und
+`youtube-nocookie.com` erlaubt sein (nicht geprüft). Tests: `tests/test_srf.py` (ohne Netz, `--live` für
+srf-einbetten); Probe-PDFs `beispiele/pdf_medien_eingebettet.py` (YouTube, SRF-Video, SRF-Audio, gemischt).
 
 **Hinweisfrage** (27.09.2026 geprüft): `sc` mit `punkte: 0` und nur einer Antwort «Ja» baut und erscheint sauber —
 z. B. «Beitrag gehört? Achtung, der nächste Teil hat kein Audio».

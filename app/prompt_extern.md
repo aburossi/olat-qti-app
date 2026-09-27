@@ -9,10 +9,13 @@ Meine Fragen (oder mein Material) folgen am Ende dieser Nachricht.
   prüft etwas Konkretes aus dem Material; Distraktoren plausibel, gleich lang, aus typischen
   Fehlvorstellungen; kein «alle oben genannten»; Multiple Choice mit 2–3 richtigen von 4.
 - Schweizer Rechtschreibung: «ss», nie «ß».
-- **Video und Audio:** Steht bei einer Frage ein Link auf YouTube, nanoo.tv (nanoo.tv/link/v/…) oder eine
-  mp3-Datei, übernimm
-  ihn vollständig und unverändert in `medien:` dieser Frage (siehe A1 im Beispiel) — OLAT zeigt ihn als
-  Player unter dem Fragetext. Andere Links bleiben im Fragetext. Keine Links erfinden.
+- **Video und Audio:** Steht bei einer Frage ein Link auf YouTube, SRF (srf.ch/play/…, auch die Adresse aus einem
+  SRF-Einbettungscode `<iframe src="…">`), nanoo.tv (nanoo.tv/link/v/…) oder eine mp3-Datei, übernimm ihn vollständig
+  und unverändert in `medien:` dieser Frage (siehe A1 im Beispiel) — OLAT bettet ihn als Player ein. Hat jede Aufgabe
+  ihren eigenen Link, gehört er zu ihr, nicht an die Sektion. Andere Links bleiben im Fragetext. Keine Links erfinden.
+- **Ausschnitt:** Steht beim Link ein Zeitbereich («0:30–1:30», «ab 2:10»), schreib
+  `medien: [{url: "https://…", start: "0:30", ende: "1:30"}]` (bei «ab …» nur `start`). Bei YouTube wirken Start und
+  Ende nur zusammen; bei SRF und mp3 gibt es nur den Start — dann `ende` weglassen.
 - Fehlt eine Lösung oder ist etwas unklar: trotzdem übertragen und in `unsicher:` einen Satz dazu
   schreiben. Dieses Feld erscheint nicht in OLAT, nur in meiner Kontrolle.
 - **Gib ausschliesslich YAML aus, in einem einzigen Codeblock, ohne Text davor oder danach.**
@@ -222,8 +225,8 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 - Bei `matrix`/`dragdrop` müssen die Texte in `loesung` exakt wie in `zeilen`/`spalten` lauten.
 - Ein Einleitungstext (Fallbeispiel), der für mehrere Fragen gilt, gehört in die `frage` jeder dieser Fragen.
 - Optional bei jeder Frage: `quelle:` (woher die Lösung stammt) und `unsicher:` — beide erscheinen nicht in OLAT.
-- Optional bei jeder Frage: `medien: [https://www.youtube.com/watch?v=…]` für ein Video (YouTube, nanoo.tv) oder eine mp3-URL,
-  mit Grösse als `medien: [{url: "https://…", breite: 640, hoehe: 360}]`.
+- Optional bei jeder Frage: `medien: [https://www.youtube.com/watch?v=…]` für ein Video (YouTube, SRF, nanoo.tv) oder
+  eine mp3-URL, mit Grösse als `medien: [{url: "https://…", breite: 640, hoehe: 360}]`, mit Zeitbereich siehe oben.
 - Fragen, die ein Bild zum Anklicken oder Beschriften brauchen, weglassen und am Ende unter
   `uebersprungen: [«A7: braucht ein Bild»]` aufführen.
 - **Texte in Antworten und Aussagen immer in Anführungszeichen** (`{text: "…", richtig: true}`) —

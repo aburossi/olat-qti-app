@@ -1,6 +1,8 @@
-"""SRF/SRG-Audio → mp3 (olatqti.srg_mp3, umwandeln.srg_links_aufloesen), 27.09.2026.
+"""Medien eingebettet (27.09.2026): SRF-Player, YouTube-Player mit Ausschnitt, OLAT-Player mit Startzeit,
+SRF-Links in der App (offline) und Zeitbereiche vom Modell. Nichts wird heruntergeladen.
 
-Ohne Argument mit nachgebauten Antworten (kein Netz). Mit --live gegen SRF, am Beitrag, an dem es entwickelt wurde:
+Was in OLAT geprüft ist, steht bei olatqti.medium(). Ohne Argument ohne Netz; mit --live fragt srf-einbetten
+echte SRF-Seiten ab (nur die Seiten und SRG-Metadaten, keine Mediendatei):
 
     app/.venv/Scripts/python tests/test_srf.py
     app/.venv/Scripts/python tests/test_srf.py --live
@@ -10,194 +12,152 @@ import sys
 from pathlib import Path
 from urllib.error import HTTPError
 
+import yaml
+
 WURZEL = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(WURZEL / "app"), str(WURZEL)]
 import olatqti  # noqa: E402
 import umwandeln  # noqa: E402
 
-GREDIG = "https://www.srf.ch/audio/gredig-direkt/andres-andrekson-vom-stress-stress-zu-sein?id=AUDI20260925_NR_0003"
-URN = "urn:srf:audio:76c78916-8854-3579-93ab-c8ffdf9f0679"
-MP3 = ("https://download-media.srf.ch/world/audio/Gredig_direkt_radio/2026/09/"
-       "Gredig_direkt_radio_AUDI20260925_NR_0003_17865f51254f45939dd9a71f3c7a9f4f.mp3")
-ANDERE = "urn:srf:audio:11111111-2222-3333-4444-555555555555"
+BANGKOK = "urn:srf:video:d0acac4e-ccc9-43ed-9067-3a25863abba4"          # Tagesschau-Beitrag, 1:19
+EMBED = f"https://www.srf.ch/play/embed?urn={BANGKOK}&subdivisions=false"
+YT = "https://www.youtube.com/watch?v=q2LBfTE6LI0"
 
 
-def il(urn: str, url: str, titel: str = "Beitrag", sperre=None) -> bytes:
-    return json.dumps({"chapterList": [{"urn": urn, "title": titel, "duration": 2010000, "blockReason": sperre,
-                                        "resourceList": [{"protocol": "HLS", "encoding": "AAC", "url": "x.m3u8"},
-                                                         {"protocol": "HTTPS", "encoding": "MP3", "url": url}]}]}).encode()
+def objekt(m) -> dict:
+    return olatqti.medium(m, olatqti.Ids("t")).find(olatqti.q("object")).attrib
 
 
-def netz(antworten: dict):
-    aufrufe = []
-
-    def holen(url, zeit=10.0):
-        aufrufe.append(url)
-        for teil, daten in antworten.items():
-            if teil in url:
-                return daten
-        raise HTTPError(url, 404, "Not Found", {}, None)
-    return holen, aufrufe
+def fehler_bei(m) -> str:
+    try:
+        olatqti.medium(m, olatqti.Ids("t"))
+    except olatqti.FehlerImFragensatz as e:
+        return str(e)
+    return ""
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     fehler = []
-    live = "--live" in sys.argv
 
-    if live:
-        for link in (GREDIG, URN, f"https://www.srf.ch/play/radio/redirect/detail/x?urn={URN}"):
+    # SRF-Player: URN, Play-Link und Einbettungslink ergeben denselben Player; auch als url: erkannt
+    for m in ({"srf": BANGKOK}, {"srf": f"https://www.srf.ch/play/tv/-/video/-?urn={BANGKOK}"}, {"srf": EMBED},
+              EMBED, {"url": EMBED}):
+        o = objekt(m)
+        if (o.get("data"), o.get("type"), o.get("height")) != (EMBED, "text/html", "360"):
+            fehler.append(f"SRF-Player {m}: {o}")
+    if objekt({"srf": "urn:rts:audio:123", "start": "1:30"})["data"] != \
+            "https://www.rts.ch/play/embed?urn=urn:rts:audio:123&subdivisions=false&startTime=90":
+        fehler.append("SRF-Player: RTS oder start falsch")
+
+    # YouTube mit Ausschnitt → YouTube-Player (nocookie); ohne Zeiten wie bisher im OLAT-Player
+    o = objekt({"url": YT, "start": "0:30", "ende": "1:30"})
+    if o.get("data") != "https://www.youtube-nocookie.com/embed/q2LBfTE6LI0?start=30&end=90" or o.get("type") != "text/html":
+        fehler.append(f"YouTube-Ausschnitt: {o}")
+    for kurz in ("https://youtu.be/q2LBfTE6LI0", "https://www.youtube.com/embed/q2LBfTE6LI0",
+                 "https://www.youtube.com/watch?feature=share&v=q2LBfTE6LI0"):
+        if "q2LBfTE6LI0?start=10&end=20" not in objekt({"url": kurz, "start": 10, "ende": 20})["data"]:
+            fehler.append(f"YouTube-ID nicht erkannt: {kurz}")
+    o = objekt(YT)
+    if o.get("class") != "olatFlashMovieViewer" or ",'',0,'video'," not in o.get("data-oo-movie", ""):
+        fehler.append(f"YouTube ganz nicht im OLAT-Player: {o}")
+
+    # OLAT-Player mit Startzeit (mp3, in OLAT geprüft); Zeitformate
+    o = objekt({"url": "https://example.org/a.mp3", "start": "1:30"})
+    if ",640,480,'90',0,'video'," not in o["data-oo-movie"]:
+        fehler.append(f"mp3 mit start: {o['data-oo-movie']}")
+    for wert, soll in ((30, 30), ("0:30", 30), ("14:17", 857), ("1:02:03", 3723)):
+        if olatqti.sekunden(wert) != soll:
+            fehler.append(f"sekunden({wert!r})")
+
+    # was nicht geht, meldet der Konverter klar
+    for m, stichwort in (({"url": YT, "start": 30}, "nur zusammen"), ({"url": YT, "ende": 90}, "nur zusammen"),
+                         ({"url": YT, "start": 90, "ende": 30}, "nach start"),
+                         ({"srf": BANGKOK, "ende": "1:00"}, "kennt der SRF-Player nicht"),
+                         ({"url": "https://example.org/a.mp3", "start": 1, "ende": 5}, "nicht stoppen"),
+                         ({"srf": "https://www.srf.ch/audio/x?id=AUDI1"}, "Einbettungslink"),
+                         ({"url": "https://example.org/a.mp3", "start": "1,5"}, "Minuten:Sekunden")):
+        if stichwort not in (m_ := fehler_bei(m)):
+            fehler.append(f"Meldung ohne «{stichwort}» für {m}: {m_!r}")
+
+    # App: SRF-Links in medien → {srf: …} (offline); Audio-Seite ohne URN → Hinweis; Fragetext bleibt
+    yml = (f"titel: x\nsektionen:\n  - titel: A\n    medien: ['{EMBED}']\n    fragen:\n"
+           f"      - {{typ: essay, frage: 'Quelle: {EMBED}', medien: [{{url: 'https://www.srf.ch/play/tv/-/video/-?urn={BANGKOK}', start: '0:10'}}]}}\n"
+           f"      - {{typ: essay, frage: B, medien: ['https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003', '{YT}']}}\n")
+    neu, eingebettet, hinweise = umwandeln.srg_einbetten(yml)
+    s = yaml.safe_load(neu)["sektionen"][0]
+    if s["medien"] != [{"srf": EMBED}] or s["fragen"][0]["medien"][0].get("start") != "0:10" \
+            or "srf" not in s["fragen"][0]["medien"][0] or len(eingebettet) != 2 \
+            or hinweise != ["https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003"] \
+            or s["fragen"][1]["medien"][1] != YT or s["fragen"][0]["frage"] != f"Quelle: {EMBED}":
+        fehler.append(f"srg_einbetten: {s}, {eingebettet}, {hinweise}")
+    ohne = "# Kommentar\ntitel: x\nfragen:\n  - {typ: essay, frage: A, medien: ['https://youtu.be/x']}\n"
+    if umwandeln.srg_einbetten(ohne) != (ohne, [], []):
+        fehler.append("YAML ohne SRF-Link verändert")
+    with_zip = WURZEL / "ausgabe" / "_test_srf.yaml"
+    with_zip.parent.mkdir(exist_ok=True)
+    with_zip.write_text(neu.replace("frage: B, medien: ['https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003', ",
+                                    "frage: B, medien: ["), encoding="utf-8")
+    try:
+        olatqti.baue_paket(with_zip, with_zip.with_suffix(".zip"))
+        if (p := olatqti.pruefe_paket(with_zip.with_suffix(".zip"))):
+            fehler.append(f"Paketprüfung: {p}")
+    except olatqti.FehlerImFragensatz as e:
+        fehler.append(f"Bauen mit SRF-Player: {e}")
+    finally:
+        with_zip.unlink(missing_ok=True)
+        with_zip.with_suffix(".zip").unlink(missing_ok=True)
+
+    # Modell: Medien mit Zeitbereich → YAML
+    if umwandeln._medien([{"url": YT, "start": "0:30", "ende": "1:30"}, {"url": EMBED, "start": None, "ende": None},
+                          "https://x/a.mp3"]) != [{"url": YT, "start": "0:30", "ende": "1:30"}, EMBED, "https://x/a.mp3"]:
+        fehler.append("_medien: Umwandlung vom Modell falsch")
+    if umwandeln.medien_url({"srf": EMBED}) != EMBED or umwandeln.medien_url({"url": YT, "start": 1}) != YT:
+        fehler.append("medien_url")
+
+    # srf-einbetten (Kommandozeile): Audio-Seite → URN aus der Seite, Sendungsseite → Beitrag mit gleichem Titel
+    ganz, beitrag = "urn:srf:audio:aaaa", "urn:srf:audio:bbbb"
+    il = json.dumps({"chapterList": [{"urn": ganz, "title": "Mietpreis", "duration": 2466000},
+                                     {"urn": beitrag, "title": "Mietpreis", "duration": 222000}]}).encode()
+
+    def holen(url, zeit=10.0):
+        if "echo-der-zeit" in url:
+            return f'… "{ganz}" …'.encode()
+        if "aaaa" in url:
+            return il
+        if "krimi" in url:
+            return b'data-urn="urn:srf:eawEpisode:AUDI20260926_NR_0001"'
+        raise HTTPError(url, 404, "Not Found", {}, None)
+    if olatqti.srg_einbettungslink("https://www.srf.ch/audio/echo-der-zeit/x?id=AUDI1", holen) != \
+            "https://www.srf.ch/play/embed?urn=urn:srf:audio:bbbb&subdivisions=false":
+        fehler.append("srf-einbetten: Sendungsseite nicht auf den Beitrag")
+    if olatqti.srg_einbettungslink(EMBED, holen) != EMBED:
+        fehler.append("srf-einbetten: Link mit URN")
+    for link, stichwort in (("https://www.srf.ch/audio/krimi/x?id=AUDI2", "(noch) kein"),
+                            ("https://www.srf.ch/audio/fehlt/x?id=AUDI3", "nicht erreichbar")):
+        try:
+            olatqti.srg_einbettungslink(link, holen)
+            fehler.append(f"srf-einbetten ohne Fehler: {link}")
+        except olatqti.SrgFehler as e:
+            if stichwort not in str(e):
+                fehler.append(f"srf-einbetten Meldung: {e}")
+
+    if "--live" in sys.argv:
+        for link, soll in (("https://www.srf.ch/audio/echo-der-zeit/mietpreis-initiative-bundesrat-will-indirekten-"
+                            "gegenvorschlag?id=AUDI20260925_RS_0056", "4064a09e-0000-314e-aada-4ecf1a951d7e"),
+                           ("https://www.srf.ch/audio/krimi/treibjagd-von-cynthia-pughe-co?id=AUDI20260910_NR_0020",
+                            "bfd079fd-5430-3334-8fb0-3c91a126fe97")):
             try:
-                fund = olatqti.srg_mp3(link)
-                print(f"  live: {fund['titel']!r}, {fund['minuten']} Min. ← {link[:60]}")
-                if fund["url"] != MP3:
-                    fehler.append(f"live {link}: {fund['url']}")
+                ergebnis = olatqti.srg_einbettungslink(link)
+                print(f"  live: {ergebnis}")
+                if soll not in ergebnis:
+                    fehler.append(f"live {link}: {ergebnis}")
             except olatqti.SrgFehler as e:
                 fehler.append(f"live {link}: {e}")
-        # Sendungsseite «Echo der Zeit» vom 25.09.2026: der Beitrag (3.7 Min.), nicht die ganze Sendung (41.1 Min.)
-        echo = "https://www.srf.ch/audio/echo-der-zeit/mietpreis-initiative-bundesrat-will-indirekten-gegenvorschlag?id=AUDI20260925_RS_0056"
-        try:
-            fund = olatqti.srg_mp3(echo)
-            print(f"  live: {olatqti.srg_beschreibung(fund)}")
-            if fund.get("sendung") != "Echo der Zeit" or fund["minuten"] > 10:
-                fehler.append(f"live Echo: {fund}")
-        except olatqti.SrgFehler as e:
-            fehler.append(f"live Echo: {e}")
-        from urllib.request import Request, urlopen
-        with urlopen(Request(MP3, method="HEAD"), timeout=10) as r:
-            if r.headers.get("Content-Type") != "audio/mpeg":
-                fehler.append(f"live: mp3 hat Typ {r.headers.get('Content-Type')}")
-    else:
-        # Audio-Seite mit ?id=: URN aus dem HTML; zwei URNs auf der Seite → die mit der ID im Dateinamen
-        seite = f'<html>… "{ANDERE}" … "{URN}" … "{URN}" …</html>'.encode()
-        holen, aufrufe = netz({"gredig-direkt": seite, URN: il(URN, MP3, "Andrekson"),
-                               ANDERE: il(ANDERE, "https://download-media.srf.ch/x/Andere_AUDI20260101_NR_0001.mp3")})
-        fund = olatqti.srg_mp3(GREDIG, holen=holen)
-        if fund["url"] != MP3 or fund["titel"] != "Andrekson" or fund["minuten"] != 33.5:
-            fehler.append(f"Seite mit id: {fund}")
-        # URN direkt und Play-Link mit ?urn=: keine Seite laden
-        holen, aufrufe = netz({URN: il(URN, MP3)})
-        for link in (URN, f"https://www.srf.ch/play/radio/redirect/detail/x?urn={URN}"):
-            if olatqti.srg_mp3(link, holen=holen)["url"] != MP3:
-                fehler.append(f"URN/Play-Link: {link}")
-        if any("srf.ch/play" in a for a in aufrufe):
-            fehler.append("Play-Link: Seite geladen, obwohl die URN im Link steht")
-        # Fehlerfälle: 404, keine URN, keine mp3, gesperrt
-        for antworten, link, stichwort in (
-                ({}, GREDIG, "fehlgeschlagen"),
-                ({"gredig-direkt": b"<html>nichts</html>"}, GREDIG, "keine Audio- oder Video-URN"),
-                ({URN: json.dumps({"chapterList": [{"urn": URN, "resourceList": []}]}).encode()}, URN, "keine abspielbare Datei"),
-                ({URN: il(URN, MP3, sperre="GEOBLOCK")}, URN, "gesperrt")):
-            try:
-                olatqti.srg_mp3(link, holen=netz(antworten)[0])
-                fehler.append(f"kein Fehler bei: {stichwort}")
-            except olatqti.SrgFehler as e:
-                if stichwort not in str(e):
-                    fehler.append(f"Meldung ohne «{stichwort}»: {e}")
-        # Sendungsseite (Echo der Zeit): Kapitel der ganzen Sendung + Beitrag mit demselben Titel → der Beitrag
-        ganz, beitrag, anderer = "urn:srf:audio:aaaa", "urn:srf:audio:bbbb", "urn:srf:audio:cccc"
-        echo = json.dumps({"show": {"title": "Echo der Zeit"}, "chapterList": [
-            {"urn": ganz, "title": "Mietpreis", "duration": 2466000,
-             "resourceList": [{"protocol": "HTTPS", "encoding": "MP3", "url": "https://x/Echo_RS_0056_ganz.mp3"}]},
-            {"urn": beitrag, "title": "Mietpreis", "duration": 222000,
-             "resourceList": [{"protocol": "HTTPS", "encoding": "MP3", "url": "https://x/Echo_RS_0056_beitrag.mp3"}]},
-            {"urn": anderer, "title": "Äthiopien", "duration": 402000,
-             "resourceList": [{"protocol": "HTTPS", "encoding": "MP3", "url": "https://x/Echo_RS_0056_andere.mp3"}]}]}).encode()
-        holen = netz({"echo-der-zeit": f'"{ganz}"'.encode(), "urn:srf:audio:aaaa": echo})[0]
-        fund = olatqti.srg_mp3("https://www.srf.ch/audio/echo-der-zeit/mietpreis?id=AUDI20260925_RS_0056", holen=holen)
-        if fund["url"] != "https://x/Echo_RS_0056_beitrag.mp3" or fund["sendung"] != "Echo der Zeit" \
-                or "ganze Sendung 41.1 Min." not in olatqti.srg_beschreibung(fund):
-            fehler.append(f"Sendungsseite: {fund}")
-        # partId: genau dieser Beitrag
-        fund = olatqti.srg_mp3("https://www.srf.ch/audio/echo-der-zeit/x?id=AUDI20260925_RS_0056&partId=cccc",
-                               holen=holen)
-        if fund["url"] != "https://x/Echo_RS_0056_andere.mp3":
-            fehler.append(f"partId: {fund}")
-        # Seite ohne Audio (Folge nur angekündigt, 27.09.2026: Krimi «Fährimaa 5»)
-        try:
-            olatqti.srg_mp3("https://www.srf.ch/audio/krimi/x?id=AUDI20260926_NR_0001",
-                            holen=netz({"krimi": b'data-urn="urn:srf:eawEpisode:AUDI20260926_NR_0001"'})[0])
-            fehler.append("Seite ohne Audio: kein Fehler")
-        except olatqti.SrgFehler as e:
-            if "noch" not in str(e):
-                fehler.append(f"Seite ohne Audio: {e}")
-        # Video (Tagesschau 26.09.2026): ganze Sendung → mp4 SD; Beitrag = Abschnitt → dieselbe Datei mit Startzeit
-        sendung, abschnitt = "urn:srf:video:ssss", "urn:srf:video:bbbb"
-        ts = json.dumps({"show": {"title": "Tagesschau"}, "chapterList": [{
-            "urn": sendung, "title": "Tagesschau vom 26.09.2026", "duration": 1338000,
-            "resourceList": [{"protocol": "HLS", "url": "https://x/m.m3u8"},
-                             {"protocol": "HTTP", "quality": "HD", "mimeType": "video/mp4", "url": "https://x/hd.mp4"},
-                             {"protocol": "HTTP", "quality": "SD", "mimeType": "video/mp4", "url": "https://x/sd.mp4"}],
-            "segmentList": [{"urn": abschnitt, "title": "Bangkok", "markIn": 857000, "markOut": 936000}]}]}).encode()
-        holen = netz({"ssss": ts, "bbbb": ts})[0]
-        ganz_v = olatqti.srg_mp3(f"https://www.srf.ch/play/tv/-/video/-?urn={sendung}", holen=holen)
-        teil_v = olatqti.srg_mp3(f"https://www.srf.ch/play/embed?urn={abschnitt}&subdivisions=false", holen=holen)
-        if (ganz_v["url"], ganz_v["start"], ganz_v["art"]) != ("https://x/sd.mp4", None, "video"):
-            fehler.append(f"Video ganz: {ganz_v}")
-        if (teil_v["url"], teil_v["start"], teil_v["minuten"]) != ("https://x/sd.mp4", 857, 1.3) \
-                or "startet bei 14:17" not in olatqti.srg_beschreibung(teil_v):
-            fehler.append(f"Video-Beitrag: {teil_v}")
-        # Startzeit im Player: 5. Stelle von data-oo-movie (in OLAT geprüft 27.09.2026)
-        for wert, soll in ((30, 30), ("0:30", 30), ("14:17", 857), ("1:02:03", 3723)):
-            if olatqti.sekunden(wert) != soll:
-                fehler.append(f"sekunden({wert!r}) = {olatqti.sekunden(wert)}")
-        el = olatqti.medium({"url": "https://x/sd.mp4", "start": "14:17"}, olatqti.Ids("t"))
-        if ",640,480,'857',0,'video'," not in el.find(olatqti.q("object")).get("data-oo-movie"):
-            fehler.append(f"medium mit start: {el.find(olatqti.q('object')).get('data-oo-movie')}")
-        # SRF-Player eingebettet (in OLAT geprüft 27.09.2026): URN, Play-Link und Einbettungslink ergeben dasselbe
-        bangkok = "urn:srf:video:d0acac4e-ccc9-43ed-9067-3a25863abba4"
-        soll = f"https://www.srf.ch/play/embed?urn={bangkok}&subdivisions=false"
-        for wert in (bangkok, f"https://www.srf.ch/play/tv/-/video/-?urn={bangkok}",
-                     f"https://www.srf.ch/play/embed?urn={bangkok}&subdivisions=false"):
-            o = olatqti.medium({"srf": wert}, olatqti.Ids("t")).find(olatqti.q("object"))
-            if (o.get("data"), o.get("type"), o.get("height")) != (soll, "text/html", "360"):
-                fehler.append(f"srf-Player {wert}: {o.attrib}")
-        o = olatqti.medium({"srf": "urn:rts:audio:123", "start": "1:30"}, olatqti.Ids("t")).find(olatqti.q("object"))
-        if o.get("data") != "https://www.rts.ch/play/embed?urn=urn:rts:audio:123&subdivisions=false&startTime=90":
-            fehler.append(f"srf-Player mit start/RTS: {o.get('data')}")
-        try:
-            olatqti.medium({"srf": "https://www.srf.ch/audio/x?id=AUDI1"}, olatqti.Ids("t"))
-            fehler.append("srf ohne URN: kein Fehler")
-        except olatqti.FehlerImFragensatz as e:
-            if "App" not in str(e):
-                fehler.append(f"srf ohne URN: {e}")
-        # Erkennen: Seiten ja, mp3 und fremde Links nein
-        for url, soll in ((GREDIG, True), (f"https://www.srf.ch/play/tv/x?urn={URN}", True), (MP3, False),
-                          ("https://www.youtube.com/watch?v=q2LBfTE6LI0", False), ("https://www.srf.ch/news/x", False)):
-            if olatqti.ist_srg_seite(url) != soll:
-                fehler.append(f"ist_srg_seite({url}) != {soll}")
-
-    # Im YAML: nur medien (Sektion und Frage) ersetzen, Links im Fragetext bleiben; Fehler lassen den Link stehen
-    yml = (f"titel: x\nsektionen:\n  - titel: A\n    medien: ['{GREDIG}']\n    fragen:\n"
-           f"      - {{typ: essay, frage: 'Quelle: {GREDIG}', medien: [{{url: '{GREDIG}', breite: 400}}]}}\n"
-           f"      - {{typ: essay, frage: B, medien: ['https://www.srf.ch/audio/x/kaputt?id=AUDI1']}}\n")
-
-    def aufloesen(link):
-        if "kaputt" in link:
-            raise olatqti.SrgFehler("keine mp3")
-        return {"url": MP3, "titel": "Andrekson", "minuten": 33.5, "urn": URN}
-    neu, ersetzt, fehl = umwandeln.srg_links_aufloesen(yml, aufloesen)
-    import yaml
-    s = yaml.safe_load(neu)["sektionen"][0]
-    if s["medien"] != [MP3] or s["fragen"][0]["medien"][0]["url"] != MP3 or len(ersetzt) != 1 or len(fehl) != 1 \
-            or "kaputt" not in s["fragen"][1]["medien"][0]:
-        fehler.append(f"srg_links_aufloesen: {s}, {ersetzt}, {fehl}")
-    if s["fragen"][0]["frage"] != f"Quelle: {GREDIG}" or s["fragen"][0]["medien"][0].get("breite") != 400:
-        fehler.append(f"Fragetext oder Medienangaben verändert: {s['fragen'][0]}")
-    # Video-Beitrag: aus dem Link wird {url: mp4, start: …}
-    vyml = "titel: x\nfragen:\n  - {typ: essay, frage: A, medien: ['https://www.srf.ch/play/tv/-/video/-?urn=urn:srf:video:bbbb']}\n"
-    vneu, _, _ = umwandeln.srg_links_aufloesen(vyml, lambda link: {"url": "https://x/sd.mp4", "titel": "Bangkok",
-                                                                  "minuten": 1.3, "start": 857, "art": "video"})
-    if yaml.safe_load(vneu)["fragen"][0]["medien"] != [{"url": "https://x/sd.mp4", "start": 857}]:
-        fehler.append(f"Video-Beitrag im YAML: {vneu}")
-    # ohne SRG-Link: Text Zeichen für Zeichen gleich (auch Kommentare)
-    ohne = "# Kommentar\ntitel: x\nfragen:\n  - {typ: essay, frage: A, medien: ['https://youtu.be/x']}\n"
-    if umwandeln.srg_links_aufloesen(ohne, aufloesen) != (ohne, [], []):
-        fehler.append("YAML ohne SRG-Link verändert")
 
     for f in fehler:
         print("FEHLER", f)
-    print(f"SRF-Test{' (live)' if live else ''}: {len(fehler)} Fehler")
+    print(f"Medien-Einbettung{' (live)' if '--live' in sys.argv else ''}: {len(fehler)} Fehler")
     return 1 if fehler else 0
 
 

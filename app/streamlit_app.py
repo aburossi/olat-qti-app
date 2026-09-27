@@ -28,7 +28,8 @@ import zaehler  # noqa: E402
 import umwandeln  # noqa: E402
 import formelcheck  # noqa: E402
 
-# Versionsmarke oben auf jeder Seite: zeigt, welche Fassung online läuft. «v_experimental» = mit SRF-Links → mp3
+# Versionsmarke oben auf jeder Seite: zeigt, welche Fassung online läuft. «v_experimental» = Medien eingebettet
+# (SRF-/YouTube-Player, Zeitbereiche) — nach dem Online-Test entfernen
 # (Commit «SRF-Links …»); nimmt git revert dieses Commits zurück, verschwindet die Marke mit.
 VERSION = "v_experimental"
 st.set_page_config(page_title=f"OLAT-Test erstellen ({VERSION})", page_icon="📝", layout="wide")
@@ -37,7 +38,7 @@ st.caption(f"🧪 **{VERSION}**")
 # Der Konverter liegt ausserhalb des app-Ordners. Läuft eine alte Fassung im Speicher, entstehen still
 # falsche Pakete (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten). Lieber hart stoppen.
 KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke", "pro_antwort",
-                     "formel_um_stellen", "srg_mp3")
+                     "formel_um_stellen", "srg_player", "youtube_player")
 if fehlt := [n for n in KONVERTER_BRAUCHT if not hasattr(olatqti, n)]:
     st.error(f"Die App läuft mit einer veralteten Fassung des Konverters (fehlt: {', '.join(fehlt)}). "
              "Bitte im Terminal mit Strg+C beenden und neu starten:\n\n"
@@ -92,8 +93,8 @@ with st.container(border=True):
         "Fragetypen, Punkte, Lösungen, Musterlösungen und Formeln kommen mit.\n\n"
         "- 🖼 **Bilder aus dem PDF** (Diagramme, Schemas, Fotos) landen bei der Frage, bei der sie stehen. "
         "Logos auf jeder Seite und kleine Symbole werden weggelassen.\n"
-        "- 🎬 **Video- und Audio-Links im PDF** (YouTube, nanoo.tv, mp3) werden erkannt — auch solche, die "
-        "hinter einem Wort verlinkt sind — und erscheinen in OLAT als Player.\n"
+        "- 🎬 **Video- und Audio-Links im PDF** (YouTube, SRF, nanoo.tv, mp3) werden erkannt — auch hinter einem "
+        "Wort — und in OLAT eingebettet, auf Wunsch als Ausschnitt «(0:30–1:30)».\n"
         "- ✅ Vor dem Herunterladen sehen Sie jede Frage mit ihrer Lösung und können den Fragensatz ändern.")
     if BEISPIEL_PDF.is_file():
         b1, b2 = st.columns([1, 3])
@@ -143,6 +144,28 @@ VORLAGE_PDF = Path(__file__).parent.parent / "beispiele" / "Vorlage_Fragetypen_m
 
 # Erprobt am 23.09.2026 (beispiele/pdf_typangaben.py, Prüfungssimulation 4PR26b) — bei Änderungen an
 # umwandeln.SYSTEM hier nachziehen
+MEDIEN_HILFE = """
+Video und Audio werden in OLAT **eingebettet, nie heruntergeladen** — gespielt wird von YouTube bzw. SRF.
+Im PDF den Link direkt bei der Frage hinschreiben (ausgeschrieben oder hinter einem Wort). Soll nur ein Ausschnitt
+laufen, die Zeit dazuschreiben, z. B. **«(0:30–1:30)»** oder **«ab 2:10»**.
+
+| Quelle | Welcher Link | Start | Ende |
+|---|---|---|---|
+| **YouTube** | normaler Link (`youtube.com/watch?v=…`, `youtu.be/…`) | ✓ | ✓ — nur zusammen mit Start |
+| **SRF, ein einzelner Beitrag** (z. B. aus der Tagesschau, Echo der Zeit) | **Einbettungslink**: auf SRF beim Beitrag «Teilen → Einbetten», daraus die Adresse `https://www.srf.ch/play/embed?urn=…` | spielt genau den Beitrag | von selbst am Ende des Beitrags |
+| **SRF, ganze Sendung** | Einbettungslink oder Play-Link mit `urn=…` | ✓ «ab …» | ✗ läuft bis zum Schluss |
+| **mp3, nanoo.tv** | direkter Link | ✓ bei mp3 | ✗ |
+
+**Was nicht geht:** ein beliebiges Ende bei SRF und mp3 — für einen kurzen Ausschnitt bei SRF den Link des
+**einzelnen Beitrags** nehmen, nicht den der Sendung. Eine SRF-Audio-Seite (`srf.ch/audio/…?id=…`) enthält keine
+Beitragskennung und spielt nicht — die App meldet das; dann den Einbettungslink nehmen.
+
+**Gut zu wissen:** Was SRF zeigt, entscheidet SRF — einzelne Beiträge sind nicht zum Einbetten freigegeben, laufen
+nach einer Zeit ab oder sind ausserhalb der Schweiz gesperrt. Läuft der Test im **Safe Exam Browser** oder mit
+Adressfilter, müssen `srf.ch` bzw. `youtube-nocookie.com` erlaubt sein. Vor dem Einsatz in der OLAT-Vorschau prüfen.
+"""
+
+
 TIPPS_PDF = """
 **1. Fragetyp in die Überschrift der Aufgabe schreiben** — der zuverlässigste Weg zum gewünschten Typ:
 `Aufgabe 3 – Lückentext (2 Punkte)`. Die Angabe geht vor, auch wenn die Form mehrdeutig ist
@@ -176,8 +199,9 @@ mehrere Fragen gilt, steht in jeder dieser Fragen.
 Texte **mit Zeilennummern** (Nummer am Zeilenanfang), **Tabellen mit Werten** und **Zwischentitel**:
 unten das Häkchen «Besondere Formatierung übernehmen» setzen.
 
-**6. Bilder und Medien:** Bilder direkt bei der Frage platzieren. Video/Audio als Link (YouTube, nanoo.tv,
-mp3) in die Frage — ausgeschrieben oder hinter einem Wort.
+**6. Bilder und Medien:** Bilder direkt bei der Frage platzieren. Video/Audio als Link in die Frage —
+ausgeschrieben oder hinter einem Wort, für einen Ausschnitt mit Zeit «(0:30–1:30)». Welcher Link bei SRF: siehe
+«Video und Audio» unten.
 
 **7. Das PDF selbst:** Aus Word/PowerPoint mit «Als PDF speichern», nicht gescannt — Scans gehen, sind aber
 unsicherer und teurer. Fragen, bei denen man **im Bild** klickt oder zeichnet, werden übersprungen.
@@ -225,9 +249,8 @@ def aus_pdf() -> None:
     modell = MODELL
     st.info("Nur Tests mit Fragen und Lösungen hochladen — **keine Antworten von Lernenden, keine Namen, "
             "keine Noten**. Der Text des PDFs wird zur Umwandlung an OpenAI geschickt.")
-    st.caption("🎬 **Video oder Audio einbetten:** Bei der Frage im PDF einen Link auf YouTube, nanoo.tv oder "
-               "eine mp3-Datei hinschreiben — ausgeschrieben oder hinter einem Wort verlinkt. In OLAT erscheint "
-               "er als Player unter dem Fragetext. Der Link muss für Lernende ohne Anmeldung erreichbar sein.")
+    with st.expander("🎬 Video und Audio: welcher Link, was geht (YouTube, SRF, mp3)"):
+        st.markdown(MEDIEN_HILFE)
     st.caption("🖼 **Bilder** (Diagramme, Schemas, Fotos) werden aus dem PDF übernommen und der Frage zugeordnet, "
                "bei der sie stehen. Logos auf jeder Seite und kleine Symbole werden ausgelassen.")
     tipps_pdf()
@@ -338,9 +361,8 @@ def aus_yaml() -> None:
         "oder Material und den Wunsch, daraus Fragen zu erstellen.\n"
         "3. Die Antwort der KI (YAML) unten einfügen und **Übernehmen**.")
     st.caption("Auch hier gilt: keine Antworten von Lernenden, keine Namen, keine Noten in die KI.")
-    st.caption("🎬 **Video oder Audio einbetten:** Links auf YouTube, nanoo.tv oder mp3 bei der Frage angeben — die KI "
-               "übernimmt sie nach `medien:`. Direkt im YAML: `medien: [\"https://www.youtube.com/watch?v=…\"]`. "
-               "In OLAT erscheint der Link als Player unter dem Fragetext.")
+    with st.expander("🎬 Video und Audio: welcher Link, was geht (YouTube, SRF, mp3)"):
+        st.markdown(MEDIEN_HILFE)
     with st.expander("Prompt anzeigen und kopieren", expanded=False):
         st.code(PROMPT, language="markdown", wrap_lines=True)
     st.download_button("Prompt als Datei", PROMPT.encode("utf-8"), "olat-test-prompt.md", "text/markdown")
@@ -518,7 +540,8 @@ es hakt (meist eine fehlende Einrückung oder ein fehlendes Anführungszeichen),
 | Upload | `frage` |
 
 Bilder: `bilder: [{datei, alt}]` (Datei liegt im Zip unter `bilder/`). Medien (Video/Audio):
-`medien: ["https://…"]`.
+`medien: ["https://…"]`, mit Ausschnitt `medien: [{url: "https://youtu.be/…", start: "0:30", ende: "1:30"}]`,
+SRF-Beitrag `medien: [{srf: "https://www.srf.ch/play/embed?urn=…"}]` — was wo geht: «Video und Audio» oben.
 
 **Einleitung einer Sektion:** `text:`, `medien:` und `bilder:` direkt bei der Sektion (neben `titel:`) —
 OLAT zeigt sie über jeder Frage dieser Sektion. Teile, Zeitlimit, Bestehensgrenze und Konfiguration wählen
@@ -596,10 +619,6 @@ with st.container(border=True):
         on_change=_zip_veraltet, disabled=not any(str(f.get("typ")) in ("essay", "freitext") for f in fragen),
         help="Lernende können in Freitext-Antworten nichts einfügen — sie müssen selbst schreiben. "
              "Eine Frage mit «einfuegen: true» im YAML bleibt offen.")
-    srg_aufloesen = st.checkbox(
-        "SRF-Links in abspielbare mp3 umwandeln", value=True, key="srg_mp3", on_change=_zip_veraltet,
-        help="Der OLAT-Player spielt SRF-Play- und SRF-Audio-Seiten nicht, nur die mp3 dahinter. Die App holt sie "
-             "über die SRG-Schnittstelle. Ausschalten, wenn das stört — dann bleiben die Links, wie sie sind.")
     z1, z2 = st.columns(2)
     zeitlimit = bestehen = None
     if z1.checkbox("Zeitlimit", value=False, key="mit_zeitlimit", on_change=_zip_veraltet):
@@ -616,18 +635,14 @@ yaml_gebaut = umwandeln.mit_bewertung(yaml_gebaut, pro_antwort, abzug)
 yaml_gebaut = umwandeln.mit_einstellungen(yaml_gebaut, konfig, zeitlimit, bestehen, einfuegen)
 
 
-@st.cache_data(ttl=24 * 3600, show_spinner="SRF-Audio wird aufgelöst …")
-def _srg_mp3(link: str) -> dict:
-    return olatqti.srg_mp3(link)  # Fehler werden nicht gecacht, ein neuer Versuch fragt wieder an
-
-
-if srg_aufloesen:
-    yaml_gebaut, srg_ersetzt, srg_fehler = umwandeln.srg_links_aufloesen(yaml_gebaut, _srg_mp3)
-    if srg_ersetzt:
-        st.info("🎧 SRF-Links durch die mp3 ersetzt (sonst spielt OLAT sie nicht): "
-                + "; ".join(olatqti.srg_beschreibung(e) for e in srg_ersetzt))
-    for f in srg_fehler:
-        st.warning(f"🎧 SRF-Link nicht aufgelöst, bleibt so — in OLAT spielt er vermutlich nicht: {f}")
+# SRF-Links → SRF-Player eingebettet (offline, nichts heruntergeladen); ein Beitrag spielt genau von Anfang bis Ende
+yaml_gebaut, srf_eingebettet, srf_ohne_urn = umwandeln.srg_einbetten(yaml_gebaut)
+if srf_eingebettet:
+    st.info(f"🎬 {len(srf_eingebettet)} SRF-Link(s) als SRF-Player eingebettet — ein Beitrag spielt genau von Anfang "
+            "bis Ende; mit «start» ab dieser Zeit (ein Ende gibt es beim SRF-Player nicht).")
+for url in srf_ohne_urn:
+    st.warning(f"🎬 SRF-Link ohne Beitragskennung, spielt in OLAT nicht: {url} — bitte den **Einbettungslink** des "
+               "Beitrags verwenden (SRF: Teilen → Einbetten, die Adresse aus src=\"…\").")
 
 # ------------------------------------------------------------------ bauen
 if st.button("Zip für OLAT bauen", type="primary"):

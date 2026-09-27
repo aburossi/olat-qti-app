@@ -63,6 +63,13 @@ ins YAML; ein YAML mit eigenen `teile:` bleibt unverändert. Sektionseinleitunge
 (`einleitung` im Schema). Prompt-Änderungen an Sektionen oder Typwahl mit `beispiele/probe_layout.py` (braucht
 den Schlüssel in `secrets.toml`, ~½ Rappen je Lauf) gegenprüfen, bei Typregeln auch mit der Typangaben-Probe.
 
+**Medien** (27.09.2026): **nie herunterladen oder schneiden** (Pietro: nicht urheberrechtskonform) — nur verlinken
+oder einbetten. In OLAT geprüft: YouTube-Ausschnitt mit Start+Ende im YouTube-Player (nocookie), SRF-Beitrag im
+eingebetteten SRG-Player (genau Anfang bis Ende), Start bei mp3 im OLAT-Player. Kein Ende bei SRF/mp3 möglich.
+Details und was nicht ging: README «Medien». Die App fragt SRF nicht ab (`srg_einbetten()` offline), der Link muss
+die URN enthalten (Einbettungslink); `olatqti.py srf-einbetten` hilft lokal. Neue Medien-Wege erst mit Probe-Zip in
+OLAT prüfen, dann bauen.
+
 **Formelprüfung** (`app/formelcheck.py`, 27.09.2026), nach jeder PDF-Umwandlung: (1) sicher reparieren
 (doppelte Backslashes, Lücke in Formel, Unicode-Indizes/-Operatoren in Formeln), (2) was bleibt — unpaariges $,
 Klammern, `\frac` ohne Argument, unbekannter Befehl, Formel im Klartext — Feld für Feld in EINEM Aufruf mit
@@ -83,6 +90,6 @@ Eigener OpenAI-Schlüssel je Schule: `[schluessel.<kürzel>]` mit `konten` (Secr
 `streamlit_app.py`; mit `rueckfall = true` bei leerem Guthaben oder ungültigem Schlüssel weiter über bbw
 (nicht bei Rate-Limit oder Netzfehler). Seit 23.09.2026: BMS (noch ohne Guthaben, Rückfall an), Konto `testuser@bms-w.ch` (Rolle `gast`).
 Lokal: Preview `olat-qti-app` (Port 8501, fest — Rücksprung-URL). Tests:
-`python tests/test_sektionen.py` (Teile, Sektionen, Konfiguration; braucht referenz/), `python tests/test_laenge.py`, `python tests/test_gewichte.py`, `app/.venv/Scripts/python tests/test_formeln.py`, `tests/test_srf.py` (mit `--live` gegen SRF), `tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
+`python tests/test_sektionen.py` (Teile, Sektionen, Konfiguration; braucht referenz/), `python tests/test_laenge.py`, `python tests/test_gewichte.py`, `app/.venv/Scripts/python tests/test_formeln.py`, `tests/test_srf.py` (Medien-Einbettung; `--live` fragt SRF-Seiten ab), `tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
 (Seiten ohne Text werden erkannt und auf Wunsch als Bild an OpenAI geschickt). Das PDF geht an OpenAI — nur
 Fragen/Lösungen, nie Lernendenantworten (Router §4, Hinweis in der App).
