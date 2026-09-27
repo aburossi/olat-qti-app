@@ -1019,10 +1019,12 @@ def medien_verteilen(satz: dict) -> int:
 
 
 def pruefe_medien(satz: dict, pdf_text: str) -> int:
-    """Markiert Fragen, deren Medien-URL nicht wörtlich im PDF steht (verändert oder erfunden)."""
-    markiert = 0
+    """Markiert Fragen, deren Medien-URL nicht wörtlich im PDF steht (verändert oder erfunden). Lange Links
+    brechen im PDF um — verglichen wird darum auch mit dem Text ohne Leerraum (27.09.2026, SRF-Links)."""
+    markiert, ohne_leerraum = 0, re.sub(r"\s+", "", pdf_text)
     for f in _traeger(satz):
-        fremd = [u for u in f.get("medien") or [] if isinstance(u, str) and u not in pdf_text]
+        fremd = [u for u in f.get("medien") or [] if isinstance(u, str)
+                 and u not in pdf_text and re.sub(r"\s+", "", u) not in ohne_leerraum]
         if fremd:
             hinweis = f"Medien-Link steht so nicht im PDF: {', '.join(fremd)}"
             f["unsicher"] = f"{f['unsicher']} · {hinweis}" if f.get("unsicher") else hinweis

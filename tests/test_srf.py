@@ -54,6 +54,15 @@ def main() -> int:
                     fehler.append(f"live {link}: {fund['url']}")
             except olatqti.SrgFehler as e:
                 fehler.append(f"live {link}: {e}")
+        # Sendungsseite «Echo der Zeit» vom 25.09.2026: der Beitrag (3.7 Min.), nicht die ganze Sendung (41.1 Min.)
+        echo = "https://www.srf.ch/audio/echo-der-zeit/mietpreis-initiative-bundesrat-will-indirekten-gegenvorschlag?id=AUDI20260925_RS_0056"
+        try:
+            fund = olatqti.srg_mp3(echo)
+            print(f"  live: {olatqti.srg_beschreibung(fund)}")
+            if fund.get("sendung") != "Echo der Zeit" or fund["minuten"] > 10:
+                fehler.append(f"live Echo: {fund}")
+        except olatqti.SrgFehler as e:
+            fehler.append(f"live Echo: {e}")
         from urllib.request import Request, urlopen
         with urlopen(Request(MP3, method="HEAD"), timeout=10) as r:
             if r.headers.get("Content-Type") != "audio/mpeg":
@@ -85,6 +94,33 @@ def main() -> int:
             except olatqti.SrgFehler as e:
                 if stichwort not in str(e):
                     fehler.append(f"Meldung ohne «{stichwort}»: {e}")
+        # Sendungsseite (Echo der Zeit): Kapitel der ganzen Sendung + Beitrag mit demselben Titel → der Beitrag
+        ganz, beitrag, anderer = "urn:srf:audio:aaaa", "urn:srf:audio:bbbb", "urn:srf:audio:cccc"
+        echo = json.dumps({"show": {"title": "Echo der Zeit"}, "chapterList": [
+            {"urn": ganz, "title": "Mietpreis", "duration": 2466000,
+             "resourceList": [{"protocol": "HTTPS", "encoding": "MP3", "url": "https://x/Echo_RS_0056_ganz.mp3"}]},
+            {"urn": beitrag, "title": "Mietpreis", "duration": 222000,
+             "resourceList": [{"protocol": "HTTPS", "encoding": "MP3", "url": "https://x/Echo_RS_0056_beitrag.mp3"}]},
+            {"urn": anderer, "title": "Äthiopien", "duration": 402000,
+             "resourceList": [{"protocol": "HTTPS", "encoding": "MP3", "url": "https://x/Echo_RS_0056_andere.mp3"}]}]}).encode()
+        holen = netz({"echo-der-zeit": f'"{ganz}"'.encode(), "urn:srf:audio:aaaa": echo})[0]
+        fund = olatqti.srg_mp3("https://www.srf.ch/audio/echo-der-zeit/mietpreis?id=AUDI20260925_RS_0056", holen=holen)
+        if fund["url"] != "https://x/Echo_RS_0056_beitrag.mp3" or fund["sendung"] != "Echo der Zeit" \
+                or "ganze Sendung 41.1 Min." not in olatqti.srg_beschreibung(fund):
+            fehler.append(f"Sendungsseite: {fund}")
+        # partId: genau dieser Beitrag
+        fund = olatqti.srg_mp3("https://www.srf.ch/audio/echo-der-zeit/x?id=AUDI20260925_RS_0056&partId=cccc",
+                               holen=holen)
+        if fund["url"] != "https://x/Echo_RS_0056_andere.mp3":
+            fehler.append(f"partId: {fund}")
+        # Seite ohne Audio (Folge nur angekündigt, 27.09.2026: Krimi «Fährimaa 5»)
+        try:
+            olatqti.srg_mp3("https://www.srf.ch/audio/krimi/x?id=AUDI20260926_NR_0001",
+                            holen=netz({"krimi": b'data-urn="urn:srf:eawEpisode:AUDI20260926_NR_0001"'})[0])
+            fehler.append("Seite ohne Audio: kein Fehler")
+        except olatqti.SrgFehler as e:
+            if "noch" not in str(e):
+                fehler.append(f"Seite ohne Audio: {e}")
         # Erkennen: Seiten ja, mp3 und fremde Links nein
         for url, soll in ((GREDIG, True), (f"https://www.srf.ch/play/tv/x?urn={URN}", True), (MP3, False),
                           ("https://www.youtube.com/watch?v=q2LBfTE6LI0", False), ("https://www.srf.ch/news/x", False)):

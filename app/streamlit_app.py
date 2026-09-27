@@ -625,7 +625,7 @@ if srg_aufloesen:
     yaml_gebaut, srg_ersetzt, srg_fehler = umwandeln.srg_links_aufloesen(yaml_gebaut, _srg_mp3)
     if srg_ersetzt:
         st.info("🎧 SRF-Links durch die mp3 ersetzt (sonst spielt OLAT sie nicht): "
-                + "; ".join(f"«{e['titel']}» ({e['minuten']:g} Min.)" for e in srg_ersetzt))
+                + "; ".join(olatqti.srg_beschreibung(e) for e in srg_ersetzt))
     for f in srg_fehler:
         st.warning(f"🎧 SRF-Link nicht aufgelöst, bleibt so — in OLAT spielt er vermutlich nicht: {f}")
 

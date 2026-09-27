@@ -1296,43 +1296,72 @@ def ist_srg_seite(url: str) -> bool:
     return bool(SRG_SEITE.fullmatch(str(url).strip())) and not str(url).lower().split("?")[0].endswith(".mp3")
 
 
+def _mp3(kapitel: dict) -> str | None:
+    return next((r["url"] for r in kapitel.get("resourceList", [])
+                 if r.get("protocol") == "HTTPS" and r.get("encoding") == "MP3" and r.get("url")), None)
+
+
+def _minuten(kapitel: dict) -> float:
+    return round((kapitel.get("duration") or 0) / 60000, 1)
+
+
 def srg_mp3(link: str, holen=_holen) -> dict:
-    """mp3 zu einem SRG-Audio: `link` ist eine URN, ein Play-Link mit ?urn=… oder eine Audio-Seite mit ?id=AUDI….
-    Gibt {url, titel, minuten, urn} zurück; SrgFehler, wenn es nicht geht (Netz, kein Audio, keine mp3).
-    `holen` lässt sich im Test ersetzen."""
+    """mp3 zu einem SRG-Audio: `link` ist eine URN, ein Play-Link mit ?urn=…, eine Audio-Seite mit ?id=AUDI…
+    oder ein Beitrags-Link mit &partId=…. Gibt {url, titel, minuten, urn, sendung, sendung_minuten} zurück;
+    `sendung` ist gesetzt, wenn ein einzelner Beitrag aus einer Sendung gewählt wurde. SrgFehler, wenn es nicht
+    geht (Netz, kein Audio, keine mp3, gesperrt). `holen` lässt sich im Test ersetzen.
+
+    Sendungsseiten wie «Echo der Zeit» (27.09.2026): Die Seite gehört zur ganzen Sendung (41 Min.), die SRF nach
+    ihrem ersten Beitrag benennt; der Beitrag selbst ist ein eigenes Kapitel mit demselben Titel (3.7 Min.).
+    Gibt es ein solches Kapitel, gilt der Beitrag — so, wie die Lehrperson die Seite gesehen hat."""
     import json
     from urllib.error import URLError
     from urllib.parse import parse_qs, unquote, urlparse
     link = str(link).strip()
     try:
+        teil = merkmal = None
         if SRG_URN.fullmatch(link):
-            kandidaten, merkmal = [link], None
+            kandidaten = [link]
         else:
             abfrage = parse_qs(urlparse(link).query)
-            kandidaten = SRG_URN.findall(unquote(link))
             merkmal = (abfrage.get("id") or [None])[0]  # AUDI20260925_NR_0003: steht im Dateinamen der mp3
+            if abfrage.get("partId"):
+                teil = f"urn:srf:audio:{abfrage['partId'][0]}"
+            kandidaten = SRG_URN.findall(unquote(link))
             if not kandidaten:  # Audio-Seite: die URN steht nur im HTML der Seite
-                kandidaten = list(dict.fromkeys(SRG_URN.findall(holen(link).decode("utf-8", "replace"))))
+                seite = holen(link).decode("utf-8", "replace")
+                kandidaten = list(dict.fromkeys(SRG_URN.findall(seite)))
+                if not kandidaten and "eawEpisode" in seite:
+                    raise SrgFehler("die Seite hat (noch) kein abspielbares Audio — die Folge ist angekündigt oder "
+                                    "lief nur im Radio und ist noch nicht online; später erneut versuchen")
         if not kandidaten:
             raise SrgFehler(f"keine Audio-URN gefunden in {link}")
         funde = []
         for urn in kandidaten[:5]:
             daten = json.loads(holen(SRG_IL.format(urn=urn)))
-            kapitel = next((k for k in daten.get("chapterList", []) if k.get("urn") == urn), None)
-            if not kapitel:
+            kapitel = daten.get("chapterList", [])
+            haupt = next((k for k in kapitel if k.get("urn") == urn), None)
+            if not haupt:
                 continue
-            mp3 = [r["url"] for r in kapitel.get("resourceList", [])
-                   if r.get("protocol") == "HTTPS" and r.get("encoding") == "MP3" and r.get("url")]
-            if mp3:
-                funde.append({"url": mp3[0], "titel": kapitel.get("title", ""), "urn": urn,
-                              "minuten": round((kapitel.get("duration") or 0) / 60000, 1),
-                              "gesperrt": kapitel.get("blockReason")})
+            wahl = haupt
+            if teil:
+                wahl = next((k for k in kapitel if k.get("urn") == teil), haupt)
+            else:
+                beitrag = [k for k in kapitel if k is not haupt and k.get("title") == haupt.get("title")
+                           and (k.get("duration") or 0) < (haupt.get("duration") or 0)]
+                wahl = beitrag[0] if beitrag else haupt
+            if (url := _mp3(wahl)):
+                sendung = (daten.get("show") or {}).get("title") or "der Sendung"
+                funde.append({"url": url, "titel": wahl.get("title", ""), "urn": wahl.get("urn"),
+                              "minuten": _minuten(wahl), "gesperrt": wahl.get("blockReason"),
+                              "sendung": sendung if wahl is not haupt else None,
+                              "sendung_minuten": _minuten(haupt) if wahl is not haupt else None})
     except SrgFehler:
         raise
     except (URLError, OSError, ValueError, KeyError) as e:
         raise SrgFehler(f"SRG-Abfrage fehlgeschlagen für {link}: {e}") from None
     if merkmal and len(funde) > 1:  # mehrere Beiträge auf der Seite: nur der mit der ID aus dem Link
-        funde = [f for f in funde if merkmal in f["url"]]
+        funde = [f for f in funde if merkmal in f["url"]][:1]
     elif not merkmal and len(funde) > 1 and not SRG_URN.fullmatch(link):
         raise SrgFehler(f"mehrere Beiträge auf {link} — Link zum einzelnen Beitrag verwenden")
     if not funde:
@@ -1340,6 +1369,13 @@ def srg_mp3(link: str, holen=_holen) -> dict:
     if funde[0]["gesperrt"]:
         raise SrgFehler(f"«{funde[0]['titel']}» ist gesperrt ({funde[0]['gesperrt']})")
     return funde[0]
+
+
+def srg_beschreibung(fund: dict) -> str:
+    """«Titel» (3.7 Min., Beitrag aus «Echo der Zeit», ganze Sendung 41.1 Min.) — für Meldungen."""
+    zusatz = (f", Beitrag aus «{fund['sendung']}», ganze Sendung {fund['sendung_minuten']:g} Min."
+              if fund.get("sendung") else "")
+    return f"«{fund['titel']}» ({fund['minuten']:g} Min.{zusatz})"
 
 
 # --------------------------------------------------------------- Prüfung
@@ -1423,7 +1459,7 @@ def main(argv=None):
             print(f"FEHLER: {e}", file=sys.stderr)
             return 1
         print(fund["url"])
-        print(f"  «{fund['titel']}», {fund['minuten']:g} Min., {fund['urn']}", file=sys.stderr)
+        print(f"  {srg_beschreibung(fund)}, {fund['urn']}", file=sys.stderr)
         return 0
     if a.befehl == "build":
         ziel = a.out or a.yaml.with_suffix(".zip")

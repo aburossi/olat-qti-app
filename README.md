@@ -181,7 +181,11 @@ Play-Link mit `?urn=…` oder eine Audio-Seite `srf.ch/audio/…?id=AUDI…` —
 ID im Namen trägt. Gibt die mp3-URL aus (Titel und Dauer auf stderr). **Die App** ersetzt SRF/SRG-Seiten in `medien:`
 beim Bauen automatisch (Häkchen «SRF-Links in abspielbare mp3 umwandeln», Standard an; Links im Fragetext bleiben).
 Test `tests/test_srf.py` (ohne Netz), `tests/test_srf.py --live` gegen den Beitrag «Gredig direkt» vom 25.09.2026.
-**Rückgängig:** Häkchen aus (pro Umwandlung), oder den Commit «SRF-Links …» mit `git revert` zurücknehmen — er ändert
+Sendungsseiten wie «Echo der Zeit» gehören zur ganzen Sendung (SRF benennt sie nach dem ersten Beitrag); gibt es darin
+einen Beitrag mit demselben Titel, nimmt die App den Beitrag (z. B. 3.7 statt 41 Min.) und sagt es; `&partId=…` wählt
+einen bestimmten Beitrag. Seiten ohne Audio (Folge nur angekündigt) ergeben eine Warnung, der Link bleibt.
+Probe-PDF: `beispiele/pdf_srf.py` (Link hinter einem Wort, ausgeschriebener umbrechender Link, Folge ohne Audio).
+**Rückgängig:** Häkchen aus (pro Umwandlung), oder die beiden Commits «SRF-Links …» mit `git revert` zurücknehmen — sie ändern
 nur die SRG-Funktionen in `olatqti.py`/`umwandeln.py`, das Häkchen und `tests/test_srf.py`.
 
 **Hinweisfrage** (27.09.2026 geprüft): `sc` mit `punkte: 0` und nur einer Antwort «Ja» baut und erscheint sauber —
