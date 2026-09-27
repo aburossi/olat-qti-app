@@ -76,28 +76,34 @@ def main() -> int:
                          ({"srf": BANGKOK, "ende": "1:00"}, "kennt der SRF-Player nicht"),
                          ({"url": "https://example.org/a.mp3", "start": 1, "ende": 5}, "nicht stoppen"),
                          ({"srf": "https://www.srf.ch/audio/x?id=AUDI1"}, "Einbettungslink"),
+                         ("https://www.srf.ch/audio/x?id=AUDI1", "spielt in OLAT nicht"),  # Online-Test 27.09.2026
                          ({"url": "https://example.org/a.mp3", "start": "1,5"}, "Minuten:Sekunden")):
         if stichwort not in (m_ := fehler_bei(m)):
             fehler.append(f"Meldung ohne «{stichwort}» für {m}: {m_!r}")
 
-    # App: SRF-Links in medien → {srf: …} (offline); Audio-Seite ohne URN → Hinweis; Fragetext bleibt
+    # App: SRF-Links in medien → {srf: …} (offline); Audio-Seite ohne URN → aus den Medien in den Text + Hinweis
+    # (im OLAT-Player gab sie «Unsupported format», Online-Test 27.09.2026); Fragetext mit Link bleibt
+    seite = "https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003"
     yml = (f"titel: x\nsektionen:\n  - titel: A\n    medien: ['{EMBED}']\n    fragen:\n"
            f"      - {{typ: essay, frage: 'Quelle: {EMBED}', medien: [{{url: 'https://www.srf.ch/play/tv/-/video/-?urn={BANGKOK}', start: '0:10'}}]}}\n"
-           f"      - {{typ: essay, frage: B, medien: ['https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003', '{YT}']}}\n")
+           f"      - {{typ: essay, frage: B, medien: ['{seite}', '{YT}']}}\n"
+           f"      - {{typ: essay, frage: C, medien: ['{seite}']}}\n"
+           f"  - titel: S\n    medien: ['{seite}']\n    fragen:\n      - {{typ: essay, frage: D}}\n")
     neu, eingebettet, hinweise = umwandeln.srg_einbetten(yml)
-    s = yaml.safe_load(neu)["sektionen"][0]
+    alle = yaml.safe_load(neu)["sektionen"]
+    s, s2 = alle
     if s["medien"] != [{"srf": EMBED}] or s["fragen"][0]["medien"][0].get("start") != "0:10" \
-            or "srf" not in s["fragen"][0]["medien"][0] or len(eingebettet) != 2 \
-            or hinweise != ["https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003"] \
-            or s["fragen"][1]["medien"][1] != YT or s["fragen"][0]["frage"] != f"Quelle: {EMBED}":
-        fehler.append(f"srg_einbetten: {s}, {eingebettet}, {hinweise}")
+            or "srf" not in s["fragen"][0]["medien"][0] or len(eingebettet) != 2 or hinweise != [seite] \
+            or s["fragen"][1]["medien"] != [YT] or s["fragen"][1]["frage"] != f"B\n\nBeitrag bei SRF: {seite}" \
+            or "medien" in s["fragen"][2] or "medien" in s2 or s2.get("text") != f"Beitrag bei SRF: {seite}" \
+            or s["fragen"][0]["frage"] != f"Quelle: {EMBED}":
+        fehler.append(f"srg_einbetten: {alle}, {eingebettet}, {hinweise}")
     ohne = "# Kommentar\ntitel: x\nfragen:\n  - {typ: essay, frage: A, medien: ['https://youtu.be/x']}\n"
     if umwandeln.srg_einbetten(ohne) != (ohne, [], []):
         fehler.append("YAML ohne SRF-Link verändert")
     with_zip = WURZEL / "ausgabe" / "_test_srf.yaml"
     with_zip.parent.mkdir(exist_ok=True)
-    with_zip.write_text(neu.replace("frage: B, medien: ['https://www.srf.ch/audio/x/y?id=AUDI20260925_NR_0003', ",
-                                    "frage: B, medien: ["), encoding="utf-8")
+    with_zip.write_text(neu, encoding="utf-8")  # baut ohne Fehler: kein SRF-Link ohne URN mehr in den Medien
     try:
         olatqti.baue_paket(with_zip, with_zip.with_suffix(".zip"))
         if (p := olatqti.pruefe_paket(with_zip.with_suffix(".zip"))):

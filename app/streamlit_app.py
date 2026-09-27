@@ -641,8 +641,10 @@ if srf_eingebettet:
     st.info(f"🎬 {len(srf_eingebettet)} SRF-Link(s) als SRF-Player eingebettet — ein Beitrag spielt genau von Anfang "
             "bis Ende; mit «start» ab dieser Zeit (ein Ende gibt es beim SRF-Player nicht).")
 for url in srf_ohne_urn:
-    st.warning(f"🎬 SRF-Link ohne Beitragskennung, spielt in OLAT nicht: {url} — bitte den **Einbettungslink** des "
-               "Beitrags verwenden (SRF: Teilen → Einbetten, die Adresse aus src=\"…\").")
+    st.warning(f"🎬 SRF-Link ohne Beitragskennung — als Player geht er in OLAT nicht, er steht darum nur als Text in "
+               f"der Frage: {url}. Für einen Player den **Einbettungslink** des Beitrags ins YAML schreiben "
+               "(SRF: Teilen → Einbetten, die Adresse aus src=\"…\"), z. B. `medien: [{srf: \"https://www.srf.ch/play/"
+               "embed?urn=…\"}]`.")
 
 # ------------------------------------------------------------------ bauen
 if st.button("Zip für OLAT bauen", type="primary"):

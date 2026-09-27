@@ -323,6 +323,10 @@ def medium(m, ids) -> ET.Element:
         return youtube_player(m, yt[1])
     if srg_urn(url) and url.startswith("http"):  # SRF-Einbettungs- oder Play-Link: im OLAT-Player gäbe es Fehler
         return srg_player({**m, "srf": url})
+    if ist_srg_seite(url):  # SRF-Seite ohne URN: OLAT-Player meldet «Unsupported format» (Probe 27.09.2026)
+        raise FehlerImFragensatz(f"SRF-Link ohne Beitragskennung spielt in OLAT nicht: {url} — den Einbettungslink "
+                                 "des Beitrags nehmen (SRF: Teilen → Einbetten, Adresse aus src=\"…\"), lokal hilft "
+                                 "python olatqti.py srf-einbetten <Link>")
     if _gesetzt(m, "ende"):
         raise FehlerImFragensatz(f"ende: der OLAT-Player kann nicht stoppen ({url}) — ein Ende gibt es nur bei YouTube "
                                  "und bei SRF-Beiträgen über ihren Einbettungslink")

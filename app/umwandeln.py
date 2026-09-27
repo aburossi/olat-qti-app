@@ -991,9 +991,10 @@ def nicht_uebernommen(pdf_text: str, satz: dict, min_woerter: int = 7) -> list[s
 def srg_einbetten(text: str) -> tuple[str, list[str], list[str]]:
     """SRF/SRG-Links in `medien:` → `{srf: …}`: der SRF-Player wird eingebettet und spielt einen Beitrag genau von
     Anfang bis Ende (in OLAT geprüft 27.09.2026). Offline — die URN steht im Einbettungs- oder Play-Link. Eine
-    Audio-Seite ohne URN (srf.ch/audio/…?id=…) bleibt und kommt in die Hinweise: dafür braucht es den
-    Einbettungslink. Nichts wird heruntergeladen. Gibt (Text, eingebettet, Hinweise) zurück; ohne SRF-Link bleibt
-    der Text Zeichen für Zeichen gleich."""
+    Audio-Seite ohne URN (srf.ch/audio/…?id=…) spielt nirgends: sie kommt aus den Medien in den Text («Beitrag bei
+    SRF: …», bei Fragen unter `frage`, bei Sektionen unter `text`) und in die Hinweise — im OLAT-Player gäbe sie
+    «Unsupported format» (Online-Test 27.09.2026). Nichts wird heruntergeladen. Gibt (Text, eingebettet, Hinweise)
+    zurück; ohne SRF-Link bleibt der Text Zeichen für Zeichen gleich."""
     try:
         satz = yaml.safe_load(text)
     except yaml.YAMLError:
@@ -1015,9 +1016,17 @@ def srg_einbetten(text: str) -> tuple[str, list[str], list[str]]:
                     continue
                 if url not in hinweise:
                     hinweise.append(url)
+                feld = "text" if "fragen" in x else "frage"  # Sektion: Einleitung; Frage: Fragetext
+                hinweis = f"Beitrag bei SRF: {url}"
+                x[feld] = f"{x[feld].rstrip()}\n\n{hinweis}" if x.get(feld) else hinweis
+                geaendert = True
+                continue
             neu.append(m)
         if x.get("medien"):
-            x["medien"] = neu
+            if neu:
+                x["medien"] = neu
+            else:
+                x.pop("medien")
     return (als_yaml(satz) if geaendert else text), eingebettet, hinweise
 
 
