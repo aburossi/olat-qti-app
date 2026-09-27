@@ -28,12 +28,7 @@ import zaehler  # noqa: E402
 import umwandeln  # noqa: E402
 import formelcheck  # noqa: E402
 
-# Versionsmarke oben auf jeder Seite: zeigt, welche Fassung online läuft. «v_experimental» = Medien eingebettet
-# (SRF-/YouTube-Player, Zeitbereiche) — nach dem Online-Test entfernen
-# (Commit «SRF-Links …»); nimmt git revert dieses Commits zurück, verschwindet die Marke mit.
-VERSION = "v_experimental"
-st.set_page_config(page_title=f"OLAT-Test erstellen ({VERSION})", page_icon="📝", layout="wide")
-st.caption(f"🧪 **{VERSION}**")
+st.set_page_config(page_title="OLAT-Test erstellen", page_icon="📝", layout="wide")
 
 # Der Konverter liegt ausserhalb des app-Ordners. Läuft eine alte Fassung im Speicher, entstehen still
 # falsche Pakete (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten). Lieber hart stoppen.
