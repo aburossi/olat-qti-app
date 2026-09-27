@@ -175,6 +175,14 @@ Markup wie «Medien einfügen» im OLAT-Editor (`olatFlashMovieViewer`, auch Aud
 über die URN holen: `https://il.srgssr.ch/integrationlayer/2.0/mediaComposition/byUrn/<urn>.json` → in `chapterList`
 das Kapitel mit genau dieser URN → `resourceList[].url` mit Protokoll HTTPS und Encoding MP3 (z. B.
 `https://download-media.srf.ch/world/audio/Rendez-vous_radio/2026/09/….mp3`) — das spielt, auch an der Sektion.
+Das macht **`python olatqti.py srf-mp3 <Link oder URN>`** (27.09.2026, nur Standardbibliothek): nimmt eine URN, einen
+Play-Link mit `?urn=…` oder eine Audio-Seite `srf.ch/audio/…?id=AUDI…` — dort steht die URN nur im HTML der Seite
+(die `AUDI…`-ID selbst kennt die Schnittstelle nicht); bei mehreren Beiträgen auf einer Seite gilt der, dessen mp3 die
+ID im Namen trägt. Gibt die mp3-URL aus (Titel und Dauer auf stderr). **Die App** ersetzt SRF/SRG-Seiten in `medien:`
+beim Bauen automatisch (Häkchen «SRF-Links in abspielbare mp3 umwandeln», Standard an; Links im Fragetext bleiben).
+Test `tests/test_srf.py` (ohne Netz), `tests/test_srf.py --live` gegen den Beitrag «Gredig direkt» vom 25.09.2026.
+**Rückgängig:** Häkchen aus (pro Umwandlung), oder den Commit «SRF-Links …» mit `git revert` zurücknehmen — er ändert
+nur die SRG-Funktionen in `olatqti.py`/`umwandeln.py`, das Häkchen und `tests/test_srf.py`.
 
 **Hinweisfrage** (27.09.2026 geprüft): `sc` mit `punkte: 0` und nur einer Antwort «Ja» baut und erscheint sauber —
 z. B. «Beitrag gehört? Achtung, der nächste Teil hat kein Audio».

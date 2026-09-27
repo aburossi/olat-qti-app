@@ -83,6 +83,6 @@ Eigener OpenAI-Schlüssel je Schule: `[schluessel.<kürzel>]` mit `konten` (Secr
 `streamlit_app.py`; mit `rueckfall = true` bei leerem Guthaben oder ungültigem Schlüssel weiter über bbw
 (nicht bei Rate-Limit oder Netzfehler). Seit 23.09.2026: BMS (noch ohne Guthaben, Rückfall an), Konto `testuser@bms-w.ch` (Rolle `gast`).
 Lokal: Preview `olat-qti-app` (Port 8501, fest — Rücksprung-URL). Tests:
-`python tests/test_sektionen.py` (Teile, Sektionen, Konfiguration; braucht referenz/), `python tests/test_laenge.py`, `python tests/test_gewichte.py`, `app/.venv/Scripts/python tests/test_formeln.py`, `tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
+`python tests/test_sektionen.py` (Teile, Sektionen, Konfiguration; braucht referenz/), `python tests/test_laenge.py`, `python tests/test_gewichte.py`, `app/.venv/Scripts/python tests/test_formeln.py`, `tests/test_srf.py` (mit `--live` gegen SRF), `tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
 (Seiten ohne Text werden erkannt und auf Wunsch als Bild an OpenAI geschickt). Das PDF geht an OpenAI — nur
 Fragen/Lösungen, nie Lernendenantworten (Router §4, Hinweis in der App).

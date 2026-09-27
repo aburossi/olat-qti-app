@@ -28,12 +28,16 @@ import zaehler  # noqa: E402
 import umwandeln  # noqa: E402
 import formelcheck  # noqa: E402
 
-st.set_page_config(page_title="OLAT-Test erstellen", page_icon="📝", layout="wide")
+# Versionsmarke oben auf jeder Seite: zeigt, welche Fassung online läuft. «v_experimental» = mit SRF-Links → mp3
+# (Commit «SRF-Links …»); nimmt git revert dieses Commits zurück, verschwindet die Marke mit.
+VERSION = "v_experimental"
+st.set_page_config(page_title=f"OLAT-Test erstellen ({VERSION})", page_icon="📝", layout="wide")
+st.caption(f"🧪 **{VERSION}**")
 
 # Der Konverter liegt ausserhalb des app-Ordners. Läuft eine alte Fassung im Speicher, entstehen still
 # falsche Pakete (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten). Lieber hart stoppen.
 KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke", "pro_antwort",
-                     "formel_um_stellen")
+                     "formel_um_stellen", "srg_mp3")
 if fehlt := [n for n in KONVERTER_BRAUCHT if not hasattr(olatqti, n)]:
     st.error(f"Die App läuft mit einer veralteten Fassung des Konverters (fehlt: {', '.join(fehlt)}). "
              "Bitte im Terminal mit Strg+C beenden und neu starten:\n\n"
@@ -592,6 +596,10 @@ with st.container(border=True):
         on_change=_zip_veraltet, disabled=not any(str(f.get("typ")) in ("essay", "freitext") for f in fragen),
         help="Lernende können in Freitext-Antworten nichts einfügen — sie müssen selbst schreiben. "
              "Eine Frage mit «einfuegen: true» im YAML bleibt offen.")
+    srg_aufloesen = st.checkbox(
+        "SRF-Links in abspielbare mp3 umwandeln", value=True, key="srg_mp3", on_change=_zip_veraltet,
+        help="Der OLAT-Player spielt SRF-Play- und SRF-Audio-Seiten nicht, nur die mp3 dahinter. Die App holt sie "
+             "über die SRG-Schnittstelle. Ausschalten, wenn das stört — dann bleiben die Links, wie sie sind.")
     z1, z2 = st.columns(2)
     zeitlimit = bestehen = None
     if z1.checkbox("Zeitlimit", value=False, key="mit_zeitlimit", on_change=_zip_veraltet):
@@ -606,6 +614,20 @@ with st.container(border=True):
 yaml_gebaut = umwandeln.mit_aufbau(st.session_state["yaml"], eine_sektion, neue_teile_ab)
 yaml_gebaut = umwandeln.mit_bewertung(yaml_gebaut, pro_antwort, abzug)
 yaml_gebaut = umwandeln.mit_einstellungen(yaml_gebaut, konfig, zeitlimit, bestehen, einfuegen)
+
+
+@st.cache_data(ttl=24 * 3600, show_spinner="SRF-Audio wird aufgelöst …")
+def _srg_mp3(link: str) -> dict:
+    return olatqti.srg_mp3(link)  # Fehler werden nicht gecacht, ein neuer Versuch fragt wieder an
+
+
+if srg_aufloesen:
+    yaml_gebaut, srg_ersetzt, srg_fehler = umwandeln.srg_links_aufloesen(yaml_gebaut, _srg_mp3)
+    if srg_ersetzt:
+        st.info("🎧 SRF-Links durch die mp3 ersetzt (sonst spielt OLAT sie nicht): "
+                + "; ".join(f"«{e['titel']}» ({e['minuten']:g} Min.)" for e in srg_ersetzt))
+    for f in srg_fehler:
+        st.warning(f"🎧 SRF-Link nicht aufgelöst, bleibt so — in OLAT spielt er vermutlich nicht: {f}")
 
 # ------------------------------------------------------------------ bauen
 if st.button("Zip für OLAT bauen", type="primary"):

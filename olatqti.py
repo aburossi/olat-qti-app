@@ -1271,6 +1271,77 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
             "konfig": str(satz.get("konfig") or "neutral").lower()}
 
 
+# --------------------------------------------------------------- SRG-Audio → mp3
+
+# Der OLAT-Player spielt SRF-Play- und SRF-Audio-Seiten nicht (HTML), die mp3 dahinter schon (27.09.2026 in OLAT
+# geprüft). Weg zur mp3: URN aus dem Link oder aus der Seite → Integration Layer der SRG → Kapitel mit dieser URN →
+# Datei mit Protokoll HTTPS und Encoding MP3. Nur Standardbibliothek (urllib).
+SRG_URN = re.compile(r"urn:(?:srf|rts|rsi|rtr|swi):audio:[A-Za-z0-9_-]+")
+SRG_SEITE = re.compile(r"https?://(?:www\.)?(?:srf|rts|rsi|rtr|swissinfo)\.ch/(?:play|audio)/\S+", re.I)
+SRG_IL = "https://il.srgssr.ch/integrationlayer/2.0/mediaComposition/byUrn/{urn}.json"
+
+
+class SrgFehler(ValueError):
+    pass
+
+
+def _holen(url: str, zeit: float = 10.0) -> bytes:
+    from urllib.request import Request, urlopen
+    with urlopen(Request(url, headers={"User-Agent": "Mozilla/5.0 (olat-qti)"}), timeout=zeit) as antwort:
+        return antwort.read()
+
+
+def ist_srg_seite(url: str) -> bool:
+    """SRF/RTS/RSI/RTR-Seite oder -Player-Link (keine direkte Mediendatei)."""
+    return bool(SRG_SEITE.fullmatch(str(url).strip())) and not str(url).lower().split("?")[0].endswith(".mp3")
+
+
+def srg_mp3(link: str, holen=_holen) -> dict:
+    """mp3 zu einem SRG-Audio: `link` ist eine URN, ein Play-Link mit ?urn=… oder eine Audio-Seite mit ?id=AUDI….
+    Gibt {url, titel, minuten, urn} zurück; SrgFehler, wenn es nicht geht (Netz, kein Audio, keine mp3).
+    `holen` lässt sich im Test ersetzen."""
+    import json
+    from urllib.error import URLError
+    from urllib.parse import parse_qs, unquote, urlparse
+    link = str(link).strip()
+    try:
+        if SRG_URN.fullmatch(link):
+            kandidaten, merkmal = [link], None
+        else:
+            abfrage = parse_qs(urlparse(link).query)
+            kandidaten = SRG_URN.findall(unquote(link))
+            merkmal = (abfrage.get("id") or [None])[0]  # AUDI20260925_NR_0003: steht im Dateinamen der mp3
+            if not kandidaten:  # Audio-Seite: die URN steht nur im HTML der Seite
+                kandidaten = list(dict.fromkeys(SRG_URN.findall(holen(link).decode("utf-8", "replace"))))
+        if not kandidaten:
+            raise SrgFehler(f"keine Audio-URN gefunden in {link}")
+        funde = []
+        for urn in kandidaten[:5]:
+            daten = json.loads(holen(SRG_IL.format(urn=urn)))
+            kapitel = next((k for k in daten.get("chapterList", []) if k.get("urn") == urn), None)
+            if not kapitel:
+                continue
+            mp3 = [r["url"] for r in kapitel.get("resourceList", [])
+                   if r.get("protocol") == "HTTPS" and r.get("encoding") == "MP3" and r.get("url")]
+            if mp3:
+                funde.append({"url": mp3[0], "titel": kapitel.get("title", ""), "urn": urn,
+                              "minuten": round((kapitel.get("duration") or 0) / 60000, 1),
+                              "gesperrt": kapitel.get("blockReason")})
+    except SrgFehler:
+        raise
+    except (URLError, OSError, ValueError, KeyError) as e:
+        raise SrgFehler(f"SRG-Abfrage fehlgeschlagen für {link}: {e}") from None
+    if merkmal and len(funde) > 1:  # mehrere Beiträge auf der Seite: nur der mit der ID aus dem Link
+        funde = [f for f in funde if merkmal in f["url"]]
+    elif not merkmal and len(funde) > 1 and not SRG_URN.fullmatch(link):
+        raise SrgFehler(f"mehrere Beiträge auf {link} — Link zum einzelnen Beitrag verwenden")
+    if not funde:
+        raise SrgFehler(f"keine mp3 gefunden für {link}")
+    if funde[0]["gesperrt"]:
+        raise SrgFehler(f"«{funde[0]['titel']}» ist gesperrt ({funde[0]['gesperrt']})")
+    return funde[0]
+
+
 # --------------------------------------------------------------- Prüfung
 
 AUSWAHL = ("simpleChoice", "simpleAssociableChoice", "inlineChoice", "hottext", "hotspotChoice")
@@ -1342,7 +1413,18 @@ def main(argv=None):
     b.add_argument("-o", "--out", type=Path)
     c = sub.add_parser("check", help="Zip vor dem Import prüfen")
     c.add_argument("zip", type=Path)
+    s = sub.add_parser("srf-mp3", help="mp3 zu einem SRF/SRG-Audio (Link oder URN) — für medien:")
+    s.add_argument("link")
     a = ap.parse_args(argv)
+    if a.befehl == "srf-mp3":
+        try:
+            fund = srg_mp3(a.link)
+        except SrgFehler as e:
+            print(f"FEHLER: {e}", file=sys.stderr)
+            return 1
+        print(fund["url"])
+        print(f"  «{fund['titel']}», {fund['minuten']:g} Min., {fund['urn']}", file=sys.stderr)
+        return 0
     if a.befehl == "build":
         ziel = a.out or a.yaml.with_suffix(".zip")
         try:

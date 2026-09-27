@@ -958,6 +958,43 @@ def nicht_uebernommen(pdf_text: str, satz: dict, min_woerter: int = 7) -> list[s
     return fehlt
 
 
+def srg_links_aufloesen(text: str, aufloesen) -> tuple[str, list[dict], list[str]]:
+    """SRF/SRG-Seiten in `medien:` (Sektionen und Fragen) durch ihre mp3 ersetzen — der OLAT-Player spielt nur die
+    mp3 (27.09.2026). `aufloesen(link)` → {url, titel, minuten, …} oder Ausnahme (olatqti.srg_mp3).
+    Nur in `medien:` — ein Link im Fragetext (Quellenangabe) bleibt. Ohne SRG-Link bleibt der Text Zeichen für
+    Zeichen gleich; sonst wird er neu geschrieben (Kommentare gehen dabei verloren). Gibt (Text, ersetzt, Fehler)
+    zurück; ein Link, der nicht geht, bleibt stehen und kommt in die Fehlerliste."""
+    try:
+        satz = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return text, [], []
+    if not isinstance(satz, dict):
+        return text, [], []
+    import olatqti  # liegt neben app/; die App lädt es bei jedem Lauf neu
+    links = []
+    for x in _traeger(satz):
+        for m in x.get("medien") or []:
+            url = m.get("url") if isinstance(m, dict) else m
+            if isinstance(url, str) and olatqti.ist_srg_seite(url) and url not in links:
+                links.append(url)
+    ersetzt, fehler, neu = [], [], {}
+    for url in links:
+        try:
+            fund = aufloesen(url)
+        except Exception as e:  # Netz, gesperrt, keine mp3 — der Link bleibt, die Lehrperson sieht es
+            fehler.append(f"{url}: {e}")
+            continue
+        neu[url] = fund["url"]
+        ersetzt.append({"alt": url, **fund})
+    if not neu:
+        return text, ersetzt, fehler
+    for x in _traeger(satz):
+        if x.get("medien"):
+            x["medien"] = [{**m, "url": neu.get(m.get("url"), m.get("url"))} if isinstance(m, dict)
+                           else neu.get(m, m) for m in x["medien"]]
+    return als_yaml(satz), ersetzt, fehler
+
+
 VERWEIS_MEDIUM = re.compile(r"\b(Video|Film|Clip|Audio|Hörbeitrag|Podcast)", re.I)
 
 
