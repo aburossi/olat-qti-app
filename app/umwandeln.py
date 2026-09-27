@@ -10,6 +10,7 @@ import json
 import re
 
 import pymupdf
+import yaml
 
 TYPEN = ["sc", "mc", "kprim", "match", "matchdraganddrop", "matchtruefalse", "fib", "numerical",
          "inlinechoice", "gapmixed", "hottext", "order", "essay", "upload"]
@@ -59,8 +60,12 @@ FRAGE = {
 FRAGE["required"] = list(FRAGE["properties"])
 
 SEKTION = {
-    "type": "object", "additionalProperties": False, "required": ["titel", "fragen"],
-    "properties": {"titel": {"type": "string"}, "fragen": {"type": "array", "items": FRAGE}},
+    "type": "object", "additionalProperties": False,
+    "required": ["titel", "einleitung", "medien", "bilder", "fragen"],
+    "properties": {"titel": {"type": "string"},
+                   "einleitung": {"type": ["string", "null"]},  # gilt für alle Fragen der Sektion
+                   "medien": FRAGE["properties"]["medien"], "bilder": FRAGE["properties"]["bilder"],
+                   "fragen": {"type": "array", "items": FRAGE}},
 }
 
 SCHEMA = {
@@ -103,8 +108,24 @@ SEKTIONEN
   (ohne Punktangaben wie «(12 Punkte)»); die Fragen des Teils in `fragen`, in der Reihenfolge des PDFs.
 - Hat das PDF keine solche Gliederung: genau eine Sektion mit dem Titel «Fragen».
 - Eine Überschrift, die nur eine einzige Frage einleitet, ist keine Sektion, sondern gehört zur Frage.
-- Einleitungstext eines Teils (z. B. ein Fallbeispiel), der für mehrere Fragen gilt: in der `frage`
-  jeder betroffenen Frage voranstellen, damit jede Frage in OLAT für sich lesbar ist.
+- Einleitung eines Teils: Was unter der Überschrift des Teils VOR seiner ersten Frage steht und für ALLE
+  Fragen des Teils gilt — Fallbeispiel, Lesetext, Ausgangslage, Angaben oder Tabelle, Diagramm, Video-Link,
+  eine Arbeitsanweisung für den ganzen Teil («Kreuzen Sie jeweils die richtige Antwort an») — kommt in
+  `einleitung` der Sektion, wörtlich und mit Format; Bilder davon in `bilder`, Video-/mp3-Links in `medien`
+  der Sektion. OLAT zeigt die Einleitung über jeder Frage des Teils: darum NICHT zusätzlich in die Fragen
+  kopieren. `frage` enthält nur, was diese eine Frage fragt.
+- Gilt ein Text nur für EINIGE Fragen des Teils, ist er keine Einleitung: in die `frage` jeder betroffenen
+  Frage voranstellen, damit sie für sich lesbar ist. Nennt der Text selbst, für welche Aufgaben er gilt
+  («Lesen Sie den Text für die Aufgaben C1 und C2»), und hat der Teil noch weitere Fragen (C3), ist das immer
+  dieser Fall — die Anweisung samt Text gehört dann in C1 und C2, nicht in die Einleitung.
+  Prüfe vor jeder Einleitung: Braucht wirklich JEDE Frage des Teils diesen Text, auch die letzte? Wenn nein:
+  keine Einleitung.
+- Text zwischen Testtitel und erstem Teil, der sagt, wofür er gilt («Schauen Sie das Video zuerst an. Die Fragen
+  in Teil A beziehen sich darauf»): in `einleitung` der genannten Sektion(en), nicht weglassen.
+- Hat das PDF keine Teile, aber vor der ersten Frage eine Ausgangslage für alle Fragen: `einleitung` der
+  einen Sektion «Fragen». Punkt- und Zeitangaben, Name/Datum-Felder, allgemeine Prüfungshinweise
+  («Hilfsmittel: keine») gehören nicht in die Einleitung.
+- Ohne Einleitung: `einleitung`, `medien` und `bilder` der Sektion = null.
 - Alles, was zwischen Fragetext und Antwortoptionen steht — Formeln, Gleichungen, Matrizen, Tabellen,
   Angaben —, gehört in `frage` (als eigener Absatz). Nichts davon weglassen, auch nicht, wenn es im
   Text zerstückelt über mehrere Zeilen steht (gestapelte Brüche: Zähler und Nenner auf eigenen Zeilen).
@@ -160,12 +181,46 @@ FRAGETYP WÄHLEN — nach der Form im PDF, wenn kein Typ genannt ist
   («akzeptiert: 18 bis 22» → {{#20±2}}). Bei allen Lückentypen darf `text` nie null sein.
 - hottext: Wörter im Text anklicken → `text` mit [[Wort]], richtige [[*Wort]]
 
+ANTWORTFORM IM PDF — woran du den Typ erkennst (wenn kein Typ genannt ist)
+Schau, WIE im PDF geantwortet wird, nicht nur, was gefragt ist. Das Verb allein («Nennen Sie») entscheidet nicht.
+- Eine kurze Linie (____), ein kleines Kästchen oder eine Klammer für ein Wort, einen Begriff, eine Zahl
+  → Lückentyp, nie essay — auch wenn die Frage mit «Nennen/Geben Sie an» beginnt. Ist die Antwort eine Zahl
+  (mit oder ohne Einheit: «6 Monate», «42,5 Stunden», «1291»), immer numerical ({{#6}}), nie fib.
+- Nummerierte oder mit Strichen aufgezählte Antwortlinien («Nennen Sie drei Merkmale: 1. ___ 2. ___ 3. ___»)
+  → EINE fib-Frage, nie essay: `text` als Liste, genau wie im PDF nummeriert, eine Zeile je Linie mit genau
+  einer Lücke («1. {{Rohstoffe}}», nächste Zeile «2. {{Energie}}»). Punkte = Summe über alle Linien.
+  Ist die Reihenfolge frei (die Lösung zählt Begriffe auf, die in jeder Reihenfolge stimmen, oder nennt mehr
+  Begriffe als Linien, «z. B. …»), bekommt jede Lücke ALLE Lösungsbegriffe als Varianten ({{Rohstoffe|Energie|Arbeit}})
+  und `unsicher` = «Reihenfolge frei: jede Lücke akzeptiert alle Begriffe — doppelte Nennung beim Korrigieren prüfen».
+  Verlangt jede Linie einen ganzen Satz (Erklärung, Begründung): essay.
+- Mehrere Zeilen oder ein grosses Feld für Sätze, Verben wie «Begründen, Erklären, Beschreiben, Beurteilen,
+  Vergleichen, Diskutieren» → essay mit `antwortzeilen` = Linienzahl im PDF.
+- Leere Tabelle, in deren Zellen Lernende kurze Einträge (Wort, Zahl) schreiben → fib/numerical/gapmixed, je
+  Tabellenzeile eine Zeile im `text`: «- Zeilenkopf: {{…}}», bei mehreren Spalten «- Zeilenkopf: Spalte A {{…}},
+  Spalte B {{…}}». Sätze in den Zellen → essay (die leere Tabelle in `frage`).
+- Wortkasten oder Wortliste zum Einsetzen über/unter einem Lückentext → inlinechoice: jede Lücke bietet alle
+  Wörter des Kastens an, das richtige mit *; den Wortkasten nicht zusätzlich in `frage` abschreiben.
+- Begriffe paarweise verbinden (zwei Spalten, Linien ziehen, Buchstabe neben Nummer eintragen «1 → __») → match,
+  jede Zeile genau eine Spalte. Begriffe in wenige Gruppen/Kategorien sortieren → matchdraganddrop.
+- Kästchen zum Nummerieren (Schritte 1–5 in die richtige Reihenfolge bringen) → order.
+- Im Text unterstreichen, markieren, einkreisen → hottext.
+- Kästchen oder Kreise vor Antwortoptionen zum Ankreuzen → sc/mc (siehe oben); eine Tabelle mit Spalten
+  «richtig/falsch» → kprim/matchtruefalse; eine Tabelle mit Kreuzen in mehreren Spalten → match.
+- Eine Aufgabe mit Teilaufgaben verschiedener Antwortform (a) Begriff nennen, b) erklären) → je Teilaufgabe
+  eine Frage mit Titel «4a …», «4b …» und passendem Typ; die gemeinsame Angabe in jede dieser Fragen.
+
 VIDEO UND AUDIO
-- Steht bei einer Frage ein Link auf ein YouTube-Video (youtube.com/watch?v=…, youtu.be/…), ein nanoo.tv-Video
-  (nanoo.tv/link/v/…) oder eine mp3-Datei (URL endet auf .mp3), gehört er in `medien` dieser Frage — OLAT bettet
-  ihn dann als Player ein.
-  Die URL vollständig und unverändert übernehmen, den Link-Text aus der Frage weglassen
-  (z. B. «Video: https://…» oder «Hören Sie hier»).
+- Links auf ein YouTube-Video (youtube.com/watch?v=…, youtu.be/…), ein nanoo.tv-Video (nanoo.tv/link/v/…) oder
+  eine mp3-Datei (URL endet auf .mp3) kommen in `medien` — OLAT bettet sie als Player ein. Die URL vollständig
+  und unverändert übernehmen, den Link-Text weglassen (z. B. «Video: https://…» oder «Hören Sie hier»).
+- WOHIN, entscheidet, worauf sich die Fragen beziehen — NICHT, wo der Link im PDF steht:
+  · Sagt das PDF, dass sich ein ganzer Teil auf das Video bezieht («Die Fragen in Teil A beziehen sich darauf»,
+    «Teil A – Fragen zum Video»), oder verweisen die meisten Fragen eines Teils darauf («laut Video», «aus dem
+    Video», «im Video»): in `medien` der SEKTION dieses Teils — auch wenn der Link unter der ersten Frage steht.
+    Dann nicht zusätzlich bei der Frage.
+  · In anderen Teilen: in `medien` JEDER Frage, die ausdrücklich auf das Video verweist («Das Beispiel aus dem
+    Video», «Das Video fragt …») — auch wenn der Link dort nicht noch einmal steht.
+  · Braucht nur eine einzige Frage das Video: in `medien` dieser Frage.
 - Links, die im PDF hinter einem Wort liegen, stehen am Seitenende unter «Links auf dieser Seite»
   mit dem Wort, hinter dem sie liegen — so ordnest du sie der richtigen Frage zu.
 - Andere Links (Webseiten, Dokumente) nicht in `medien`, sondern im Fragetext lassen.
@@ -249,7 +304,8 @@ zu der es gehört — meist steht es direkt unter oder über dem Fragetext, oder
 Marke, genau so; `alt` = kurze sachliche Beschreibung des Bildinhalts für Screenreader (5–12 Wörter), ohne
 die Lösung zu verraten. Ein Bild gehört zu einer weiteren Frage nur, wenn diese ausdrücklich darauf
 verweist («im Diagramm», «der Abbildung») oder ohne das Bild nicht beantwortbar ist — dann bei jeder dieser
-Fragen eintragen.
+Fragen eintragen. Gehört ein Bild zur Einleitung eines Teils (siehe SEKTIONEN), steht es in `bilder` der
+Sektion — nicht zusätzlich bei den Fragen.
 Bilder, die zu keiner Frage gehören (Logo, Dekoration), weglassen. Keine Dateinamen erfinden.
 Ohne Bild `bilder` = null. Die Marken selbst nie in Fragetexte übernehmen."""
 
@@ -412,6 +468,11 @@ def _tabellen(s) -> list[tuple]:
             for t in gefunden if t.row_count >= 2 and t.col_count >= 2]
 
 
+# Typografische Ligaturen aus dem PDF (Word setzt «ﬀ» in «Stoﬀ»): landeten sonst so in OLAT — sieht gleich
+# aus, findet aber keine Suche, und das Modell kopiert sie mal, mal nicht (27.09.2026)
+LIGATUREN = str.maketrans({"ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "st", "ﬆ": "st"})
+
+
 def seitentext(s, name_zu: dict | None = None, nr: int = 0) -> str:
     """Text einer Seite in Leserichtung mit Formatierung als Markdown — **fett**, *kursiv*,
     - Aufzählung, | Tabelle | — und an jeder Bildstelle «[Bild: name]»."""
@@ -434,7 +495,7 @@ def seitentext(s, name_zu: dict | None = None, nr: int = 0) -> str:
                 zeilen.append(f"[Bild: {name}]")
         else:
             zeilen += _zeilen(b, punkte)
-    return "\n".join(zeilen)
+    return "\n".join(zeilen).translate(LIGATUREN)
 
 
 def pdf_text_mit_bildern(daten: bytes, funde: list[dict]) -> str:
@@ -493,8 +554,7 @@ def frage_openai(client, modell: str, text: str, bilder: list[tuple[int, bytes]]
 
 def zu_fragensatz(roh: dict, erweitert: bool = False) -> dict:
     """JSON aus dem Modell -> Fragensatz im YAML-Format von olatqti.py (immer mit `sektionen`)."""
-    sektionen = [{"titel": s["titel"], "fragen": [_frage(q, erweitert) for q in s["fragen"]]}
-                 for s in roh["sektionen"] if s["fragen"]]
+    sektionen = [_sektion(s, erweitert) for s in roh["sektionen"] if s["fragen"]]
     satz = {"titel": roh["titel"], "sektionen": sektionen}
     if roh.get("uebersprungen"):
         satz["uebersprungen"] = roh["uebersprungen"]
@@ -516,11 +576,80 @@ def mit_bewertung(text: str, pro_antwort: bool = True, abzug: bool = True) -> st
     return kopf + text
 
 
-def alle_fragen(satz: dict) -> list[tuple[str, dict]]:
-    """(Sektionstitel, Frage) über alle Sektionen — auch für Sätze ohne `sektionen`."""
+_EINSTELLUNGEN_OBEN = re.compile(r"^(?:konfig|zeitlimit|bestehen)\s*:.*(?:\n|$)", re.M)
+
+
+def mit_einstellungen(text: str, konfig: str = "neutral", zeitlimit: float | None = None,
+                      bestehen: float | None = None) -> str:
+    """Testeinstellungen der Lehrperson oben ins YAML (`konfig`, `zeitlimit` in Minuten, `bestehen` in
+    Punkten) und ersetzt, was dort schon stand. Ohne Zeitlimit/Grenze fehlen die Zeilen ganz (Standard)."""
+    kopf = f"konfig: {konfig}\n"
+    if zeitlimit:
+        kopf += f"zeitlimit: {zeitlimit:g}\n"
+    if bestehen is not None:
+        kopf += f"bestehen: {bestehen:g}\n"
+    text = _EINSTELLUNGEN_OBEN.sub("", text)
+    if (m := re.match(r"\s*---[^\n]*\n", text)):
+        return text[:m.end()] + kopf + text[m.end():]
+    return kopf + text
+
+
+def sektionen_von(satz: dict) -> list[dict]:
+    """Die Sektionen eines Satzes ohne `teile` (ohne `sektionen` ist alles eine Sektion)."""
     if "sektionen" in satz:
-        return [(s.get("titel", ""), f) for s in satz["sektionen"] or [] for f in s.get("fragen") or []]
-    return [("", f) for f in satz.get("fragen") or []]
+        return list(satz["sektionen"] or [])
+    return [{"titel": satz.get("sektion", "Sektion"), "fragen": satz.get("fragen") or [],
+             **({"mischen": satz["mischen"]} if "mischen" in satz else {})}]
+
+
+def mit_aufbau(text: str, eine_sektion: bool = False, neue_teile_ab: list[int] = ()) -> str:
+    """Gliedert den Satz um: alle Sektionen zu einer zusammenlegen, oder an den Sektionsnummern in
+    `neue_teile_ab` (0-basiert) einen neuen Teil beginnen. Hat das YAML schon `teile`, bleibt es unverändert —
+    dann hat die Lehrperson den Aufbau selbst geschrieben."""
+    if not eine_sektion and not neue_teile_ab:
+        return text
+    satz = yaml.safe_load(text) or {}
+    if not isinstance(satz, dict) or "teile" in satz:
+        return text
+    seks = sektionen_von(satz)
+    for k in ("sektionen", "fragen", "sektion", "mischen"):
+        satz.pop(k, None)
+    if eine_sektion:
+        # Die Einleitung einer Sektion gilt nur für ihre Fragen — in einer einzigen Sektion stünde sie über
+        # allen. Darum wandert sie in jede ihrer Fragen zurück: Text vor `frage`, Medien und Bilder dazu.
+        fragen = []
+        for s in seks:
+            for f in s.get("fragen") or []:
+                f = dict(f)
+                if s.get("text"):
+                    f["frage"] = f"{s['text']}\n\n{f['frage']}" if f.get("frage") else s["text"]
+                for feld in ("medien", "bilder"):
+                    if s.get(feld):
+                        f[feld] = [*s[feld], *(f.get(feld) or [])]
+                fragen.append(f)
+        satz["sektionen"] = [{"titel": satz.get("titel", "Sektion"), "fragen": fragen}]
+    else:
+        grenzen = [0, *sorted({i for i in neue_teile_ab if 0 < i < len(seks)}), len(seks)]
+        satz["teile"] = [{"sektionen": seks[a:b]} for a, b in zip(grenzen, grenzen[1:])]
+    return yaml.safe_dump(satz, allow_unicode=True, sort_keys=False, width=110)
+
+
+def alle_sektionen(satz: dict) -> list[tuple[str, dict]]:
+    """(Anzeigetitel, Sektion) — mit «Teil n · » davor, wenn der Satz `teile` hat."""
+    if "teile" in satz:
+        return [(f"Teil {i} · {s.get('titel', '')}", s) for i, t in enumerate(satz["teile"] or [], 1)
+                for s in sektionen_von(t)]
+    return [(s.get("titel", ""), s) for s in sektionen_von(satz)]
+
+
+def alle_fragen(satz: dict) -> list[tuple[str, dict]]:
+    """(Sektionstitel, Frage) über alle Sektionen — auch für Sätze ohne `sektionen` und mit `teile`."""
+    return [(titel, f) for titel, s in alle_sektionen(satz) for f in s.get("fragen") or []]
+
+
+def kurz(text: str | None, laenge: int = 400) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= laenge else text[:laenge - 1] + "…"
 
 
 STEUERZEICHEN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -624,6 +753,20 @@ def _ohne_rot(o):
     return o
 
 
+def _sektion(s: dict, erweitert: bool = False) -> dict:
+    """Sektion aus dem Modell: Einleitung, Medien und Bilder der Sektion (27.09.2026), dann die Fragen."""
+    sek = {"titel": s["titel"]}
+    text = _saeubern(_latex_reparieren(_ohne_rot(_ohne_doppel(s.get("einleitung")))))
+    if text and text.strip():
+        sek["text"] = _zwischentitel(text) if erweitert else text
+    if s.get("medien"):
+        sek["medien"] = s["medien"]
+    if s.get("bilder"):
+        sek["bilder"] = [{"datei": f"bilder/{b['datei']}", "alt": b["alt"]} for b in s["bilder"]]
+    sek["fragen"] = [_frage(q, erweitert) for q in s["fragen"]]
+    return sek
+
+
 def _frage(q: dict, erweitert: bool = False) -> dict:
     q = _latex_reparieren(_ohne_rot(q))
     q["frage"] = _ohne_doppel(q.get("frage"))
@@ -703,10 +846,39 @@ def kosten(verbrauch: dict, modell: str) -> float | None:
     return (verbrauch["eingabe"] * ein + verbrauch["ausgabe"] * aus) / 1_000_000
 
 
+def _traeger(satz: dict) -> list[dict]:
+    """Alles, was Medien und Bilder tragen kann: Sektionen (Einleitung) und Fragen."""
+    teile = satz["teile"] if "teile" in satz else [satz]
+    return [x for t in teile or [] for sek in sektionen_von(t) for x in (sek, *(sek.get("fragen") or []))]
+
+
+VERWEIS_MEDIUM = re.compile(r"\b(Video|Film|Clip|Audio|Hörbeitrag|Podcast)", re.I)
+
+
+def medien_verteilen(satz: dict) -> int:
+    """Hat der Test genau einen Medien-Link, bekommt ihn jede Frage, die auf «Video»/«Audio» verweist und ihn
+    weder selbst noch über ihre Sektionseinleitung zeigt. Das Modell setzt den Link nur dort, wo er im PDF
+    steht, nicht bei «Das Beispiel aus dem Video» in einem späteren Teil (Ideale-Gase-PDF, 27.09.2026).
+    Bei mehreren Links bleibt alles, wie es ist — dann wäre die Zuordnung geraten. Gibt die Anzahl zurück."""
+    urls = {u for x in _traeger(satz) for u in x.get("medien") or [] if isinstance(u, str)}
+    if len(urls) != 1:
+        return 0
+    url, dazu = urls.pop(), 0
+    teile = satz["teile"] if "teile" in satz else [satz]
+    for sek in (s for t in teile or [] for s in sektionen_von(t)):
+        if url in (sek.get("medien") or []):
+            continue
+        for f in sek.get("fragen") or []:
+            if url not in (f.get("medien") or []) and VERWEIS_MEDIUM.search(f"{f.get('frage') or ''} {f.get('text') or ''}"):
+                f["medien"] = [*(f.get("medien") or []), url]
+                dazu += 1
+    return dazu
+
+
 def pruefe_medien(satz: dict, pdf_text: str) -> int:
     """Markiert Fragen, deren Medien-URL nicht wörtlich im PDF steht (verändert oder erfunden)."""
     markiert = 0
-    for _, f in alle_fragen(satz):
+    for f in _traeger(satz):
         fremd = [u for u in f.get("medien") or [] if isinstance(u, str) and u not in pdf_text]
         if fremd:
             hinweis = f"Medien-Link steht so nicht im PDF: {', '.join(fremd)}"
@@ -718,7 +890,7 @@ def pruefe_medien(satz: dict, pdf_text: str) -> int:
 def pruefe_bilder(satz: dict, namen: set[str]) -> list[str]:
     """Entfernt Bilder mit unbekanntem Namen (markiert die Frage); gibt nicht zugeordnete Bilder zurück."""
     benutzt = set()
-    for _, f in alle_fragen(satz):
+    for f in _traeger(satz):
         gut, fremd = [], []
         for b in f.get("bilder") or []:
             name = b["datei"].removeprefix("bilder/")

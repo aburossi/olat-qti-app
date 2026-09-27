@@ -1,0 +1,176 @@
+# Nachbau von referenz/sektionen_neutral/ (OpenOlat-Export «ALLEFRAGEN_Sektionen_Teile», 27.09.2026):
+# Fragen aus punkte_pro_antwort.yaml, dazu zwei Teile, drei Sektionen mit Einleitung (Text, Video, Bild),
+# Zeitlimit und Bestehensgrenze. tests/test_referenz.py vergleicht die Fragen,
+# tests/test_sektionen.py Teststruktur und Konfiguration mit dem Original.
+titel: ALLE-FRAGEN
+konfig: neutral
+zeitlimit: 30
+bestehen: 12
+teile:
+- sektionen:
+  - titel: Sektion-Fragetypen
+    text: sektionen können wie fragen mit texte und **digitale inhalte befüllt** werden. diese inhalte werden immer
+      oberhalb von jede frage gezeigt, die in dieser sektion ist.
+    medien:
+    - https://www.youtube.com/watch?v=xvFZjo5PgG0
+    bilder:
+    - datei: ../referenz/allefragen/zeichnen_bg.png
+      alt: ''
+    fragen:
+    - typ: sc
+      titel: Single Choice
+      frage: Was ist die Hauptstadt der Schweiz?
+      antworten: &id001
+      - text: Bern
+        richtig: true
+      - Zürich
+    - typ: mc
+      titel: Multiple Choice
+      frage: Welche der folgenden Farben sind Grundfarben?
+      antworten:
+      - text: Rot
+        richtig: true
+      - text: Grün
+        richtig: true
+      - Lila
+    - typ: kprim
+      titel: Kprim
+      punkte: 3
+      frage: Kreuzen Sie an, ob die folgenden Aussagen zur Schweiz richtig oder falsch sind.
+      aussagen:
+      - text: Bern ist die Hauptstadt der Schweiz.
+        richtig: true
+      - text: Die Schweiz hat 30 Kantone.
+        richtig: false
+      - text: Die Schweiz hat vier Landessprachen.
+        richtig: true
+      - text: Die Schweiz liegt am Meer.
+        richtig: false
+    - typ: match
+      titel: Matrix
+      frage: Ordnen Sie die Tiere der richtigen Kategorie zu.
+      zeilen:
+      - Hund
+      - Papagei
+      spalten:
+      - Säugetier
+      - Vogel
+      loesung:
+        Hund: Säugetier
+        Papagei: Vogel
+    - typ: matchdraganddrop
+      titel: Drag and Drop
+      frage: Ordnen Sie die Begriffe den passenden Kategorien zu.
+      zeilen:
+      - Bern
+      - Rhein
+      spalten:
+      - Hauptstädte
+      - Flüsse
+      loesung:
+        Bern: Hauptstädte
+        Rhein: Flüsse
+    - typ: matchtruefalse
+      titel: True/false
+      frage: Kreuzen Sie an, ob die Aussagen richtig oder falsch sind.
+      aussagen:
+      - text: Die Erde ist ein Planet.
+        richtig: true
+      - text: Die Sonne kreist um die Erde.
+        richtig: false
+    - typ: fib
+      titel: Lückentext
+      punkte: 2
+      text: 'Die Hauptstadt der Schweiz heisst {{Bern}}. \
+
+        Berlin ist die {{deutsche}} Hauptstadt
+
+        '
+    - typ: numerical
+      titel: Lückentext numerisch
+      punkte: 2
+      text: 'Wasser kocht bei {{#100}} Grad Celsius (bei Normaldruck).
+
+
+        Gefrierpunkt liegt bei {{#0}} Grad Celsius
+
+        '
+    - typ: inlinechoice
+      titel: Lückentext mit Dropdown
+      punkte: 2
+      optionen:
+      - Mars
+      - Venus
+      text: 'Die Erde dreht sich um die {{*Sonne|Mond}}.
+
+
+        Der {{*Mond}}dreht sich um die Erde.
+
+        '
+    - typ: gapmixed
+      titel: Lückentext gemischt
+      optionen:
+      - Multiplikation
+      - Substraktion
+      text: 'Der europaeische Sitz der UNO befindet sich in {{Genf}}
+
+
+        1+1 = 2
+
+
+        1+1 ist eine {{*Addition}}
+
+        '
+    - typ: hottext
+      titel: Hottext
+      text: 'Der Eiffelturm steht in [[*Paris]][[Bern]][[London]]
+
+
+        Der Big Ben steht in [[ Paris ]] [[Bern]] [[*London]]
+
+        '
+    - typ: hotspot
+      titel: Hotspot
+      frage: Klicken Sie auf den blauen Kreis.
+      bild: ../referenz/allefragen/hotspot.png
+      breite: 400
+      hoehe: 300
+      bereiche:
+      - form: circle
+        koord: 55,77,16
+        richtig: true
+      - form: circle
+        koord: 60,60,25
+    - typ: order
+      titel: Reihenfolge
+      frage: Bringen Sie die Schritte der Wassererhitzung in die richtige Reihenfolge.
+      elemente:
+      - Topf mit Wasser füllen
+      - Topf auf den Herd stellen
+      - Wasser zum Kochen bringen
+      - Nudeln hinzufügen
+    - typ: essay
+      titel: Freitext
+      frage: Beschreiben Sie in eigenen Worten, was Nachhaltigkeit für Sie bedeutet (mind. 3 Sätze).
+    - typ: upload
+      titel: Datei hochladen
+      frage: Laden Sie Ihre schriftliche Zusammenfassung als PDF-Datei hoch.
+    - typ: drawing
+      titel: Zeichnen
+      frage: Skizzieren Sie den Aufbau einer Pflanzenzelle und beschriften Sie die wichtigsten Bestandteile.
+      bild: ../referenz/allefragen/zeichnen_bg.png
+      breite: 500
+      hoehe: 350
+  - titel: Sektion-2-teil-1
+    text: platzhalter für demo
+    fragen:
+    - &id002
+      typ: sc
+      titel: Single Choice (Copy)
+      frage: Was ist die Hauptstadt der Schweiz?
+      antworten: *id001
+- sektionen:
+  - titel: Sektion-test-2-teil
+    text: diese sektion ist nur als platzhalter für die demo des zweiten teil
+    fragen:
+    - *id002

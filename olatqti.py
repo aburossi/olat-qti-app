@@ -537,13 +537,55 @@ def bau_truefalse(f, ids, typ):
 LUECKE = re.compile(r"\{\{(.+?)\}\}")
 
 
+def formel_um_stellen(z: str, muster: re.Pattern) -> str:
+    """Steht eine Lücke/Hottext-Stelle mitten in einer Formel, die Formel davor schliessen und danach wieder
+    öffnen: «$V_2 = {{#1.5}}\\,\\text{L}$» → «$V_2 =$ {{#1.5}} $\\,\\text{L}$». Sonst hätte jedes Stück ein
+    einzelnes $ und OLAT zeigte den LaTeX-Code (gpt-5.6-luna, Ideale-Gase-PDF, 27.09.2026)."""
+    if "$" not in z:
+        return z
+    stellen = {m.start(): m.end() for m in muster.finditer(z)}
+    out, formel, neu_offen, k = [], None, False, 0  # formel: Inhalt seit dem öffnenden $, None = ausserhalb
+
+    def schliessen():
+        inhalt = formel.strip() if neu_offen else formel.rstrip() if k in stellen else formel
+        if inhalt.strip():
+            out.append((" " if neu_offen else "") + f"${inhalt}$" + (" " if k in stellen else ""))
+    while k < len(z):
+        if k in stellen:
+            if formel is not None:  # Formel vor der Stelle schliessen, danach wieder öffnen
+                schliessen()
+                formel, neu_offen = "", True
+            out.append(z[k:stellen[k]])
+            k = stellen[k]
+            continue
+        zeichen = z[k:k + 2] if z[k] == "\\" else z[k]
+        if zeichen == "$":
+            if formel is None:
+                formel, neu_offen = "", False
+            else:
+                schliessen()
+                formel = None
+        elif formel is not None:
+            formel += zeichen
+        else:
+            out.append(zeichen)
+        k += len(zeichen)
+    if formel is not None:  # nicht geschlossen: unverändert lassen
+        out.append("$" + formel)
+    return "".join(out)
+
+
 def absatz_mit_stellen(zeilen: list[str], muster: re.Pattern, stelle) -> ET.Element:
     """<p> aus Zeilen, in denen `muster` Lücken oder Hottexte markiert; `stelle(m)` baut das Element.
-    Eine Zeile, die mit \\ endet, bricht um (<br/>), sonst werden die Zeilen mit Leerzeichen verbunden."""
+    Eine Zeile, die mit \\ endet, bricht um (<br/>), sonst werden die Zeilen mit Leerzeichen verbunden —
+    ausser jede Zeile ist ein Listenpunkt («1. », «- ») oder beginnt mit einer Nummer: dann bleibt jede Zeile
+    (Lücken je Listenpunkt, 27.09.2026; <br/> wie in referenz/punkte_pro_antwort/, keine <ol> um Lücken)."""
     el = E("p")
+    liste = len(zeilen) > 1 and all(LISTE.fullmatch(z) or NUMMERIERT.match(z) for z in zeilen)
     for i, z in enumerate(zeilen):
-        umbruch = z.endswith("\\")
+        umbruch = z.endswith("\\") or liste
         z = z.rstrip("\\").rstrip() if umbruch else z
+        z = formel_um_stellen(z, muster)
         pos = 0
         for m in muster.finditer(z):
             anhaengen(el, z[pos:m.start()])
@@ -986,7 +1028,48 @@ def sektionen(satz: dict) -> list[dict]:
              "mischen": satz.get("mischen", False)}]
 
 
-def baue_test(titel, items_je_sektion, ids, gesamt) -> ET.Element:
+def teile(satz: dict) -> list[list[dict]]:
+    """Testteile (OpenOlat: testPart), je eine Liste von Sektionen. Ohne `teile:` ist alles ein Teil.
+    Ein Teil hat `sektionen:` oder direkt `fragen:`; `bewertung`/`abzug` am Teil gelten für seine Sektionen."""
+    if "teile" not in satz:
+        return [sektionen(satz)]
+    out = []
+    for i, teil in enumerate(satz["teile"] or [], 1):
+        if not isinstance(teil, dict) or not (teil.get("sektionen") or teil.get("fragen")):
+            raise FehlerImFragensatz(f"Teil {i}: `sektionen` oder `fragen` fehlt")
+        seks = [dict(s) for s in sektionen(teil)]
+        for sek in seks:
+            for feld in ("bewertung", "abzug"):
+                if feld not in sek and feld in teil:
+                    sek[feld] = teil[feld]
+        out.append(seks)
+    if not out:
+        raise FehlerImFragensatz("`teile` ist leer")
+    return out
+
+
+def sektionskopf(sek: dict, ids, bilder: Bilder) -> ET.Element:
+    """Einleitung einer Sektion (rubricBlock): `text`, danach `medien` und `bilder` wie bei Fragen.
+    OpenOlat zeigt sie über jeder Frage der Sektion (referenz/sektionen_neutral/, 27.09.2026)."""
+    rb = E("rubricBlock", {"view": "candidate"})
+    rb.extend(bloecke(sek.get("text")))
+    rb.extend(medium(m, ids) for m in sek.get("medien") or [])
+    for eintrag in sek.get("bilder") or []:
+        if isinstance(eintrag, str):
+            eintrag = {"datei": eintrag}
+        bild = bilder.nimm(pflicht(eintrag, "datei"))
+        b, h = bild.groesse({"titel": sek.get("titel", "Sektion"), "breite": eintrag.get("breite"),
+                             "hoehe": eintrag.get("hoehe")})
+        if b > MAX_BILDBREITE and not eintrag.get("breite"):
+            b, h = MAX_BILDBREITE, round(h * MAX_BILDBREITE / b)
+        rb.append(E("p", None, E("img", {"src": bild.name, "alt": str(eintrag.get("alt") or "Abbildung"),
+                                         "width": b, "height": h})))
+    return rb
+
+
+def baue_test(titel, items_je_teil, ids, gesamt, zeitlimit=None, bestehen=None) -> ET.Element:
+    """items_je_teil: je Teil eine Liste (Sektion, rubricBlock, [(datei, id), …]).
+    zeitlimit in Minuten, bestehen in Punkten — Aufbau wie referenz/sektionen_neutral/."""
     root = E("assessmentTest", {"identifier": ids("test"), "title": titel, **TOOL})
     root.set(f"{{{XSI}}}schemaLocation", SCHEMA_LOC)
     for ident, default in (("MINSCORE", "0.0"), ("MAXSCORE", zahl(gesamt)), ("SCORE", None)):
@@ -994,24 +1077,40 @@ def baue_test(titel, items_je_sektion, ids, gesamt) -> ET.Element:
         if default is not None:
             od.append(E("defaultValue", None, value(default)))
         root.append(od)
-    tp = E("testPart", {"identifier": ids("tp"), "navigationMode": "nonlinear", "submissionMode": "individual"},
-           E("itemSessionControl", {"maxAttempts": "0", "showFeedback": "false", "allowReview": "false",
-                                    "showSolution": "false", "allowComment": "true", "allowSkipping": "true"}))
-    for sek, items in items_je_sektion:
-        s = E("assessmentSection", {"identifier": ids("sect"), "fixed": "true",
-                                    "title": sek.get("titel", "Sektion"), "visible": "true"},
-              E("itemSessionControl"), E("ordering", {"shuffle": str(sek.get("mischen", False)).lower()}),
-              E("rubricBlock", {"view": "candidate"}))
-        for datei, datei_id in items:
-            s.append(E("assessmentItemRef", {"identifier": datei_id, "href": datei}))
-        tp.append(s)
-    root.append(tp)
-    root.append(E("outcomeProcessing", None,
-                  E("setOutcomeValue", {"identifier": "SCORE"}, E("sum", None,
-                    E("testVariables", {"variableIdentifier": "SCORE"}))),
-                  E("outcomeCondition", None, E("outcomeIf", None,
-                    E("lt", None, var("SCORE"), var("MINSCORE")),
-                    E("setOutcomeValue", {"identifier": "SCORE"}, var("MINSCORE"))))))
+    if bestehen is not None:
+        root.append(E("outcomeDeclaration", {"identifier": "PASS", "cardinality": "single", "baseType": "boolean"},
+                      E("defaultValue", None, value("false"))))
+    if zeitlimit:
+        root.append(E("timeLimits", {"maxTime": zahl(float(zeitlimit) * 60)}))
+    for seks in items_je_teil:
+        tp = E("testPart", {"identifier": ids("tp"), "navigationMode": "nonlinear", "submissionMode": "individual"},
+               E("itemSessionControl", {"maxAttempts": "0", "showFeedback": "false", "allowReview": "false",
+                                        "showSolution": "false", "allowComment": "true", "allowSkipping": "true"}))
+        for sek, kopf, items in seks:
+            s = E("assessmentSection", {"identifier": ids("sect"), "fixed": "true",
+                                        "title": sek.get("titel", "Sektion"), "visible": "true"},
+                  E("itemSessionControl"), E("ordering", {"shuffle": str(sek.get("mischen", False)).lower()}),
+                  kopf)
+            for datei, datei_id in items:
+                s.append(E("assessmentItemRef", {"identifier": datei_id, "href": datei}))
+            tp.append(s)
+        root.append(tp)
+    op = E("outcomeProcessing", None,
+           E("setOutcomeValue", {"identifier": "SCORE"}, E("sum", None,
+             E("testVariables", {"variableIdentifier": "SCORE"}))),
+           E("outcomeCondition", None, E("outcomeIf", None,
+             E("lt", None, var("SCORE"), var("MINSCORE")),
+             E("setOutcomeValue", {"identifier": "SCORE"}, var("MINSCORE")))))
+    if bestehen is not None:
+        def pass_(w):
+            return E("setOutcomeValue", {"identifier": "PASS"}, E("baseValue", {"baseType": "boolean"}, text=w))
+        op.append(E("outcomeCondition", None,
+                    E("outcomeIf", None,
+                      E("gte", None, E("sum", None, E("testVariables", {"variableIdentifier": "SCORE"})),
+                        E("baseValue", {"baseType": "float"}, text=zahl(float(bestehen)))),
+                      pass_("true")),
+                    E("outcomeElse", None, pass_("false"))))
+    root.append(op)
     return root
 
 
@@ -1046,7 +1145,22 @@ MANIFEST_TEST = """        <resource identifier="{rid}" type="imsqti_test_xmlv2p
             <file href="{href}"/>
         </resource>
 """
-PAKETKONFIG = (Path(__file__).parent / "vorlagen" / "QTI21PackageConfig.xml")
+KONFIG_ORDNER = Path(__file__).parent / "vorlagen" / "konfig"
+# Testeinstellungen (QTI21PackageConfig.xml), je ein OpenOlat-Export (referenz/sektionen_*/, 27.09.2026):
+# neutral — pausieren erlaubt, kein Feedback, keine Resultate; formativ — Feedback, Punktestand und
+# Resultate mit Lösungen nach dem Abschluss, abbrechen erlaubt; summativ — ein Versuch, nicht
+# pausierbar, nach Abschluss nur die Punktzahl.
+KONFIGURATIONEN = ("neutral", "formativ", "summativ")
+
+
+def paketkonfig(name, mit_bestehen: bool) -> bytes:
+    name = str(name or "neutral").lower()
+    if name not in KONFIGURATIONEN:
+        raise FehlerImFragensatz(f"Unbekannte konfig «{name}». Erlaubt: {', '.join(KONFIGURATIONEN)}")
+    text = (KONFIG_ORDNER / f"{name}.xml").read_text(encoding="utf-8")
+    if not mit_bestehen:  # ohne Bestehensgrenze kein passedType (wie die frühere Vorlage)
+        text = text.replace("  <passedType>cutValue</passedType>\n", "")
+    return text.encode("utf-8")
 
 
 def xml_bytes(root: ET.Element) -> bytes:
@@ -1060,29 +1174,41 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
     bilder = Bilder(yaml_pfad.parent)
     dateien: dict[str, bytes] = {}
     manifest = [MANIFEST_KOPF]
-    items_je_sektion, gesamt, zaehler = [], 0.0, {}
-    for sek in sektionen(satz):
-        items = []
-        for f in pflicht(sek, "fragen"):
-            f = dict(f, _eigene=set(f))  # _eigene: was in der Frage selbst steht, nicht geerbt
-            f.setdefault("bewertung", sek.get("bewertung", satz.get("bewertung", "antwort")))
-            if f.get("abzug") is None and sek.get("abzug", satz.get("abzug")) is not None:
-                f["abzug"] = sek.get("abzug", satz.get("abzug"))  # z. B. abzug: 0 für den ganzen Test
-            typ, datei, datei_id, root, punkte, interaktionen = baue_frage(f, ids, bilder)
-            dateien[datei] = xml_bytes(root)
-            zeilen = "\n".join(f"                    <ns2:interactionType>{i}</ns2:interactionType>"
-                                for i in interaktionen)
-            manifest.append(MANIFEST_ITEM.format(rid=ids("item"), href=datei, interaktionen=zeilen, typ=typ))
-            items.append((datei, datei_id))
-            gesamt += punkte
-            zaehler[typ] = zaehler.get(typ, 0) + 1
-        items_je_sektion.append((sek, items))
+    zeitlimit, bestehen = satz.get("zeitlimit"), satz.get("bestehen")  # beide optional, Standard: keine
+    for feld, wert in (("zeitlimit", zeitlimit), ("bestehen", bestehen)):
+        if wert is not None and (isinstance(wert, bool) or not isinstance(wert, (int, float))):
+            raise FehlerImFragensatz(f"{feld}: «{wert}» ist keine Zahl ({'Minuten' if feld == 'zeitlimit' else 'Punkte'})")
+    if zeitlimit is not None and zeitlimit <= 0:
+        raise FehlerImFragensatz(f"zeitlimit: {zeitlimit} — Minuten grösser als 0 angeben oder weglassen")
+    konfig = paketkonfig(satz.get("konfig"), bestehen is not None)  # früh, damit ein Tippfehler sofort auffällt
+    items_je_teil, gesamt, zaehler = [], 0.0, {}
+    for seks in teile(satz):
+        items_je_sektion = []
+        for sek in seks:
+            items = []
+            for f in pflicht(sek, "fragen"):
+                f = dict(f, _eigene=set(f))  # _eigene: was in der Frage selbst steht, nicht geerbt
+                f.setdefault("bewertung", sek.get("bewertung", satz.get("bewertung", "antwort")))
+                if f.get("abzug") is None and sek.get("abzug", satz.get("abzug")) is not None:
+                    f["abzug"] = sek.get("abzug", satz.get("abzug"))  # z. B. abzug: 0 für den ganzen Test
+                typ, datei, datei_id, root, punkte, interaktionen = baue_frage(f, ids, bilder)
+                dateien[datei] = xml_bytes(root)
+                zeilen = "\n".join(f"                    <ns2:interactionType>{i}</ns2:interactionType>"
+                                    for i in interaktionen)
+                manifest.append(MANIFEST_ITEM.format(rid=ids("item"), href=datei, interaktionen=zeilen, typ=typ))
+                items.append((datei, datei_id))
+                gesamt += punkte
+                zaehler[typ] = zaehler.get(typ, 0) + 1
+            items_je_sektion.append((sek, sektionskopf(sek, ids, bilder), items))
+        items_je_teil.append(items_je_sektion)
+    if bestehen is not None and not 0 <= float(bestehen) <= gesamt:
+        raise FehlerImFragensatz(f"bestehen: {bestehen} liegt nicht zwischen 0 und {gesamt:g} Punkten")
     test_datei = f"test{uuid.uuid5(uuid.NAMESPACE_URL, 'olatqti/' + titel)}.xml"
-    dateien[test_datei] = xml_bytes(baue_test(titel, items_je_sektion, ids, gesamt))
+    dateien[test_datei] = xml_bytes(baue_test(titel, items_je_teil, ids, gesamt, zeitlimit, bestehen))
     manifest.append(MANIFEST_TEST.format(rid=ids("test"), href=test_datei))
     manifest.append("    </resources>\n</manifest>\n")
     dateien["imsmanifest.xml"] = "".join(manifest).encode("utf-8")
-    dateien["QTI21PackageConfig.xml"] = PAKETKONFIG.read_bytes()
+    dateien["QTI21PackageConfig.xml"] = konfig
     for b in bilder.dateien.values():
         dateien[b.name] = b.daten
     ziel.parent.mkdir(parents=True, exist_ok=True)
@@ -1090,7 +1216,9 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
         z.writestr("imsmanifest.xml", dateien.pop("imsmanifest.xml"))
         for name, daten in dateien.items():
             z.writestr(name, daten)
-    return {"titel": titel, "fragen": sum(zaehler.values()), "punkte": gesamt, "typen": zaehler}
+    return {"titel": titel, "fragen": sum(zaehler.values()), "punkte": gesamt, "typen": zaehler,
+            "teile": len(items_je_teil), "sektionen": sum(len(t) for t in items_je_teil),
+            "konfig": str(satz.get("konfig") or "neutral").lower()}
 
 
 # --------------------------------------------------------------- Prüfung
@@ -1126,6 +1254,9 @@ def pruefe_paket(zip_pfad: Path) -> list[str]:
                 for ref in root.iter(q("assessmentItemRef")):
                     if ref.get("href") not in hrefs:
                         fehler.append(f"Test verweist auf {ref.get('href')}, das nicht im Manifest steht")
+                for img in root.iter(q("img")):  # Bilder in Sektionseinleitungen
+                    if img.get("src") not in namen:
+                        fehler.append(f"{h}: Bild {img.get('src')} fehlt im Paket")
                 continue
             ids_ = [e.get("identifier") for t in AUSWAHL for e in root.iter(q(t))]
             if len(ids_) != len(set(ids_)):
@@ -1151,6 +1282,9 @@ def pruefe_paket(zip_pfad: Path) -> list[str]:
 
 
 def main(argv=None):
+    for strom in (sys.stdout, sys.stderr):  # Windows-Konsole (cp1252) stürzte an «‑» im Titel ab, 27.09.2026
+        if hasattr(strom, "reconfigure"):
+            strom.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="befehl", required=True)
     b = sub.add_parser("build", help="YAML-Fragensatz -> QTI-2.1-Zip")
@@ -1168,7 +1302,8 @@ def main(argv=None):
             return 1
         fehler = pruefe_paket(ziel)
         typen = ", ".join(f"{k} {v}" for k, v in info["typen"].items())
-        print(f"{ziel}  «{info['titel']}»  {info['fragen']} Fragen, {info['punkte']:g} Punkte  ({typen})")
+        print(f"{ziel}  «{info['titel']}»  {info['fragen']} Fragen, {info['punkte']:g} Punkte  ({typen})"
+              f"  — {info['teile']} Teil(e), {info['sektionen']} Sektion(en), Konfiguration {info['konfig']}")
         for x in fehler:
             print(f"  PRÜFUNG: {x}", file=sys.stderr)
         return 1 if fehler else 0

@@ -144,6 +144,88 @@ def main() -> int:
     if kopf != "---\nbewertung: antwort\nabzug: 0\ntitel: x\nfragen:\n  - abzug: 2\n":
         fehler.append(f"mit_bewertung: {kopf!r}")
 
+    # Testaufbau (27.09.2026): Standard = Sektionen, ein Teil, neutral, ohne Zeitlimit und Grenze
+    def paket(einstellen=None) -> tuple[str, str, dict]:
+        at5 = neu()
+        at5.session_state["yaml"] = beispiel
+        at5.session_state["pdf_name"] = "test"
+        at5.run()
+        if einstellen:
+            einstellen(at5)
+            at5.run()
+        next(b for b in at5.button if b.label == "Zip für OLAT bauen").click()
+        at5.run()
+        if at5.exception or "zip" not in at5.session_state:
+            return "", "", {"fehler": [e.value for e in at5.error] or at5.exception}
+        with zipfile.ZipFile(io.BytesIO(at5.session_state["zip"])) as z:
+            test = next(d for n in z.namelist() if n.startswith("test") and (d := z.read(n).decode("utf-8")))
+            return test, z.read("QTI21PackageConfig.xml").decode("utf-8"), at5.session_state["zip_info"]
+    test, konf, info = paket()
+    if (info.get("teile"), info.get("sektionen"), info.get("konfig")) != (1, n_sek, "neutral") \
+            or "timeLimits" in test or "PASS" in test or "passedType" in konf:
+        fehler.append(f"Standard-Aufbau: {info}")
+
+    def alles_an(a):
+        a.checkbox(key="mehrere_teile").set_value(True)
+        a.run()
+        a.multiselect(key="teile_ab").set_value([a.multiselect(key="teile_ab").options[0]])
+        a.selectbox(key="konfig").set_value("summativ")
+        a.checkbox(key="mit_zeitlimit").set_value(True)
+        a.checkbox(key="mit_bestehen").set_value(True)
+        a.run()
+        a.number_input(key="zeitlimit").set_value(30)
+        a.number_input(key="bestehen").set_value(4.5)
+    test, konf, info = paket(alles_an)
+    if (info.get("teile"), info.get("konfig")) != (2, "summativ") or test.count("<testPart") != 2 \
+            or 'maxTime="1800.0"' not in test or '<baseValue baseType="float">4.5' not in test \
+            or "<maxAttempts>1</maxAttempts>" not in konf or "passedType" not in konf:
+        fehler.append(f"Teile/Zeitlimit/Grenze/summativ: {info}")
+
+    def eine(a):
+        a.checkbox(key="mehrere_sektionen").set_value(False)
+    test, _, info = paket(eine)
+    if info.get("sektionen") != 1 or info.get("fragen") != n_fragen:
+        fehler.append(f"eine Sektion: {info}")
+    if umwandeln.mit_einstellungen("konfig: formativ\nzeitlimit: 9\ntitel: x\n", "neutral") != "konfig: neutral\ntitel: x\n":
+        fehler.append("mit_einstellungen ersetzt alte Zeilen nicht")
+    # Sektionseinleitung aus dem Modell (27.09.2026): Text, Medien, Bilder an der Sektion
+    frage_roh = {k: None for k in umwandeln.FRAGE["properties"]} | {"typ": "essay", "titel": "1 X", "punkte": 2,
+                                                                     "frage": "Warum?"}
+    sek = umwandeln._sektion({"titel": "Teil A", "einleitung": "Fall: Lara <rot>x</rot>", "medien": ["https://y"],
+                              "bilder": [{"datei": "s1_bild1.png", "alt": "a"}], "fragen": [frage_roh]})
+    if sek.get("text") != "Fall: Lara x" or sek.get("medien") != ["https://y"] \
+            or sek.get("bilder") != [{"datei": "bilder/s1_bild1.png", "alt": "a"}]:
+        fehler.append(f"_sektion: {sek}")
+    leer = umwandeln._sektion({"titel": "T", "einleitung": None, "medien": None, "bilder": None, "fragen": [frage_roh]})
+    if set(leer) != {"titel", "fragen"}:
+        fehler.append(f"_sektion ohne Einleitung: {leer}")
+    # eine Sektion: die Einleitung wandert in die Fragen ihrer Sektion zurück, nicht über alle
+    zwei = yaml.safe_dump({"titel": "x", "sektionen": [
+        {"titel": "A", "text": "Fall A", "bilder": [{"datei": "bilder/a.png", "alt": ""}], "fragen": [{"typ": "essay", "frage": "a1"}]},
+        {"titel": "B", "fragen": [{"typ": "essay", "frage": "b1"}]}]}, allow_unicode=True)
+    eins = yaml.safe_load(umwandeln.mit_aufbau(zwei, eine_sektion=True))["sektionen"]
+    if len(eins) != 1 or "text" in eins[0] or eins[0]["fragen"][0]["frage"] != "Fall A\n\na1" \
+            or not eins[0]["fragen"][0].get("bilder") or eins[0]["fragen"][1]["frage"] != "b1":
+        fehler.append(f"eine Sektion mit Einleitung: {eins}")
+    # ein Medien-Link: jede Frage mit Verweis «Video» bekommt ihn, ausser ihre Sektion zeigt ihn schon
+    v = "https://www.youtube.com/watch?v=q2LBfTE6LI0"
+    satz_v = {"titel": "x", "sektionen": [
+        {"titel": "A", "medien": [v], "fragen": [{"typ": "sc", "frage": "Laut Video?"}]},
+        {"titel": "B", "fragen": [{"typ": "numerical", "frage": "Das Beispiel aus dem Video", "text": "{{#6}}"},
+                                  {"typ": "numerical", "frage": "Rechnen Sie", "text": "{{#2}}"}]}]}
+    n_v = umwandeln.medien_verteilen(satz_v)
+    fb = satz_v["sektionen"][1]["fragen"]
+    if n_v != 1 or fb[0].get("medien") != [v] or "medien" in fb[1] or "medien" in satz_v["sektionen"][0]["fragen"][0]:
+        fehler.append(f"medien_verteilen: {satz_v}")
+    satz_v["sektionen"][1]["fragen"][1]["medien"] = ["https://youtu.be/anders"]
+    if umwandeln.medien_verteilen(satz_v) != 0:
+        fehler.append("medien_verteilen verteilt trotz zwei verschiedener Links")
+    if "Stoﬀ ﬁx".translate(umwandeln.LIGATUREN) != "Stoff fix":
+        fehler.append("Ligaturen nicht aufgelöst")
+    selbst = "titel: x\nteile:\n  - fragen: [{typ: essay, frage: a}]\n"
+    if umwandeln.mit_aufbau(selbst, True, [1]) != selbst:
+        fehler.append("mit_aufbau ändert einen Satz, der schon teile hat")
+
     for x in fehler:
         print("FEHLER", x)
     print(f"App-Test: {len(fehler)} Fehler")

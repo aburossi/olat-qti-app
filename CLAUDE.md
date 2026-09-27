@@ -56,6 +56,21 @@ liefert `public.olat_nutzung(tage)` (security definer mit Rollencheck). Migratio
 vom 25.09.2026 zusätzlich mit `pdf`/`yaml`-Spalten (Anzahl je Quelle pro Lehrperson), in der
 Admin-Übersicht in `streamlit_app.py` angezeigt. Zählerfehler dürfen die App nie stoppen.
 
+**Testaufbau** (27.09.2026): Box «Testaufbau und Einstellungen» — mehrere Sektionen (Std. an), mehrere Teile
+(Std. aus, Lehrperson wählt die Sektion, mit der ein Teil beginnt), Konfiguration neutral/formativ/summativ,
+Zeitlimit und Bestehensgrenze (Std. aus). `umwandeln.mit_aufbau()` / `mit_einstellungen()` schreiben das
+ins YAML; ein YAML mit eigenen `teile:` bleibt unverändert. Sektionseinleitungen liefert das Modell selbst
+(`einleitung` im Schema). Prompt-Änderungen an Sektionen oder Typwahl mit `beispiele/probe_layout.py` (braucht
+den Schlüssel in `secrets.toml`, ~½ Rappen je Lauf) gegenprüfen, bei Typregeln auch mit der Typangaben-Probe.
+
+**Formelprüfung** (`app/formelcheck.py`, 27.09.2026), nach jeder PDF-Umwandlung: (1) sicher reparieren
+(doppelte Backslashes, Lücke in Formel, Unicode-Indizes/-Operatoren in Formeln), (2) was bleibt — unpaariges $,
+Klammern, `\frac` ohne Argument, unbekannter Befehl, Formel im Klartext — Feld für Feld in EINEM Aufruf mit
+Fehlerliste zurück ans Modell; angenommen nur, wenn Lücken und Wortlaut ausserhalb der Formeln gleich bleiben und
+es weniger Befunde sind, (3) Rest als «Formel prüfen» in `unsicher`. Kosten des zweiten Aufrufs zählen mit.
+Beim YAML-Weg nur Meldung, keine Änderung. Meldet `formelcheck` einen gültigen Befehl als unbekannt, ihn in
+`BEKANNT` ergänzen — sonst «korrigiert» das Modell eine richtige Formel (so am 27.09.2026 mit `\det`).
+
 **Prüftabelle** (`streamlit_app.py`, `tabelle_mit_umbruch()`): eigene HTML-Tabelle statt
 `st.dataframe`, seit 25.09.2026 — `st.dataframe` (glide-data-grid) kann Zellen nicht umbrechen und
 schneidet lange Titel/Lösungen ab. `Titel`, `Lösung` und `Unsicher` sind als breite Spalten markiert;
@@ -68,6 +83,6 @@ Eigener OpenAI-Schlüssel je Schule: `[schluessel.<kürzel>]` mit `konten` (Secr
 `streamlit_app.py`; mit `rueckfall = true` bei leerem Guthaben oder ungültigem Schlüssel weiter über bbw
 (nicht bei Rate-Limit oder Netzfehler). Seit 23.09.2026: BMS (noch ohne Guthaben, Rückfall an), Konto `testuser@bms-w.ch` (Rolle `gast`).
 Lokal: Preview `olat-qti-app` (Port 8501, fest — Rücksprung-URL). Tests:
-`app/.venv/Scripts/python tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
+`python tests/test_sektionen.py` (Teile, Sektionen, Konfiguration; braucht referenz/), `app/.venv/Scripts/python tests/test_formeln.py`, `tests/test_umwandeln.py`, `tests/test_scanseiten.py`, `tests/test_medien.py`, `tests/test_bilder.py`, `tests/test_latex.py`, `tests/test_format.py` und `tests/test_app.py`
 (Seiten ohne Text werden erkannt und auf Wunsch als Bild an OpenAI geschickt). Das PDF geht an OpenAI — nur
 Fragen/Lösungen, nie Lernendenantworten (Router §4, Hinweis in der App).

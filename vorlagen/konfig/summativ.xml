@@ -2,23 +2,24 @@
   <enableCancel>false</enableCancel>
   <enableSuspend>false</enableSuspend>
   <displayScoreProgress>false</displayScoreProgress>
-  <displayQuestionProgress>false</displayQuestionProgress>
+  <displayQuestionProgress>true</displayQuestionProgress>
   <displayMaxScoreItem>true</displayMaxScoreItem>
   <showMenu>true</showMenu>
   <showTitles>true</showTitles>
   <personalNotes>false</personalNotes>
   <hideLms>true</hideLms>
-  <hideFeedbacks>false</hideFeedbacks>
+  <hideFeedbacks>true</hideFeedbacks>
   <blockAfterSuccess>false</blockAfterSuccess>
-  <maxAttempts>0</maxAttempts>
+  <maxAttempts>1</maxAttempts>
   <allowAnonym>false</allowAnonym>
   <digitalSignature>false</digitalSignature>
   <digitalSignatureMail>false</digitalSignatureMail>
-  <showAssessmentResultsOnFinish>false</showAssessmentResultsOnFinish>
+  <showAssessmentResultsOnFinish>true</showAssessmentResultsOnFinish>
   <enableAssessmentItemBack>false</enableAssessmentItemBack>
   <enableAssessmentItemResetHard>false</enableAssessmentItemResetHard>
   <enableAssessmentItemResetSoft>false</enableAssessmentItemResetSoft>
   <enableAssessmentItemSkip>false</enableAssessmentItemSkip>
+  <passedType>cutValue</passedType>
   <assessmentResultsOptions>
     <metadata>false</metadata>
     <sectionSummary>false</sectionSummary>

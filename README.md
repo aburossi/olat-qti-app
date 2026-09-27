@@ -41,8 +41,8 @@ Felder) ignoriert der Konverter; sie landen nie im Paket.
 
 `referenz/allefragen/` ist ein echter Export aus OpenOlat 21.0.2 mit allen 16
 Fragetypen (22.09.2026). Das Skript baut diesen Export nach; der Test vergleicht
-jede Frage nach Normalisierung der Identifikatoren — derzeit 35/35 identisch (16 Typen + Hinweis + Musterlösung
-+ LaTeX + derselbe Satz mit «Punkte pro Antwort», `referenz/punkte_pro_antwort/`, 23.09.2026).
+jede Frage nach Normalisierung der Identifikatoren — derzeit 52/52 identisch (16 Typen + Hinweis + Musterlösung
++ LaTeX + derselbe Satz mit «Punkte pro Antwort», `referenz/punkte_pro_antwort/`, 23.09.2026, + derselbe in Teilen und Sektionen, `referenz/sektionen_neutral/`, 27.09.2026).
 Die Normalisierung ignoriert, was nur der OLAT-Editor zufällig hinterlässt: Leerraum wie im Browser,
 die Reihenfolge der Deklarationen je Lücke, die Kennung neu eingefügter Lücken, die Reihenfolge
 gemischter Dropdown-Optionen.
@@ -66,6 +66,38 @@ fragen:                   # oder: sektionen: [{titel, mischen, fragen: [...]}]
       - {text: Bern, richtig: true}
       - Zürich
 ```
+
+**Teile, Sektionen, Testeinstellungen** (27.09.2026, nachgebaut aus `referenz/sektionen_{neutral,formativ,summativ}/`,
+Nachbau `beispiele/sektionen_teile.yaml`, geprüft von `tests/test_sektionen.py`; Demo `beispiele/teile_demo.yaml`):
+
+```yaml
+titel: LK Werkstoffe
+konfig: neutral          # neutral (Standard) | formativ | summativ — siehe unten
+zeitlimit: 45            # Minuten für den ganzen Test (optional)
+bestehen: 12             # bestanden ab so vielen Punkten (optional)
+teile:                   # optional; ohne teile: ist alles ein Teil
+  - sektionen:           # oder direkt fragen:
+      - titel: A – Diagramm
+        mischen: false
+        text: Einleitung, **Markdown** wie bei frage     # steht über jeder Frage der Sektion
+        medien: [https://www.youtube.com/watch?v=…]    # wie bei Fragen
+        bilder: [{datei: bilder/diagramm.png, alt: …}]  # wie bei Fragen
+        fragen: [...]
+  - sektionen: [...]     # Teil 2: in OLAT erst nach Abschluss von Teil 1
+```
+
+Die Einleitung (`rubricBlock`) zeigt OLAT über jeder Frage der Sektion; Reihenfolge Text → Medien → Bilder.
+`bewertung`/`abzug` gehen vom Test über den Teil und die Sektion zur Frage. `konfig` wählt die
+Testeinstellungen (`QTI21PackageConfig.xml`, Vorlagen in `vorlagen/konfig/`, je ein OLAT-Export):
+
+| konfig | Pausieren | Abbrechen | Versuche | Feedback | Resultate nach Abschluss |
+|---|---|---|---|---|---|
+| `neutral` (Std.) | ja | nein | unbegrenzt | aus | keine |
+| `formativ` | ja | ja | unbegrenzt | an, Punktestand sichtbar | mit eigenen und korrekten Lösungen |
+| `summativ` | nein | nein | 1 | aus | nur Punktzahl |
+
+Ohne `bestehen` fällt `passedType` aus der Vorlage weg (wie bisher). Achtung `neutral`/`summativ` blenden
+Feedback aus (`hideFeedbacks`) — ob das auch den Hinweis-Knopf bei Freitext verbirgt, ist in OLAT noch nicht geprüft.
 
 | typ (OpenOlat) | Alias | Felder |
 |---|---|---|
@@ -121,6 +153,30 @@ die Datei neben den Fragen im Paket. Anzeige auf 600 px Breite begrenzt, Datei i
 Aufbau nach QTI-Standard, **in OLAT importiert und angezeigt am 22.09.2026** (`beispiele/bildtest.yaml`).
 Die App holt Bilder aus dem PDF (Logos auf mehr als der Hälfte der Seiten und Bilder unter 80 px fallen
 weg), setzt an ihrer Stelle «[Bild: s2_bild1.jpg]» in den Text, und das Modell ordnet sie den Fragen zu.
+
+**Einleitung und Antwortform aus dem PDF** (27.09.2026): Das Modell liefert je Sektion `einleitung`, `medien`,
+`bilder` — Stoff für ALLE Fragen eines Teils (Fallbeispiel, Diagramm, Video) steht einmal an der Sektion statt in
+jeder Frage; Stoff nur für einige Fragen bleibt in diesen Fragen. Den Typ bestimmt die Antwortform (Block
+«ANTWORTFORM IM PDF» im Prompt): nummerierte Antwortlinien → Lückentext mit einer Zeile je Linie (im Konverter:
+ein Absatz, in dem jede Zeile ein Listenpunkt ist, behält seine Zeilen), Zahl auf der Linie → numerisch,
+Wortkasten → Dropdown, Paare verbinden → Matrix, Kästchen nummerieren → Reihenfolge. Die Prüftabelle zeigt
+Einleitungen als eigene Zeile. Legt die Lehrperson die Sektionen zusammen, wandert jede Einleitung in die
+Fragen ihrer Sektion zurück. Ligaturen aus dem PDF («ﬀ», «ﬁ») werden beim Auslesen aufgelöst.
+Probe: `beispiele/pdf_layout.py` + `beispiele/probe_layout.py` (11 Aufgaben mit Fallen); mit gpt-5.6-luna
+0, 0, 0, 1, 0 Abweichungen über fünf Läufe (die eine: Lesetext für C1/C2 nur in C2). Dieselbe Prompt-Fassung
+in der Typangaben-Probe 14/14 dreimal.
+Video/Audio: wohin, entscheidet der Bezug, nicht die Stelle des Links — bezieht sich ein ganzer Teil darauf, an die
+Sektion. Hat der Test genau einen Medien-Link, bekommt ihn danach jede Frage, die auf «Video»/«Audio» verweist und
+ihn nicht schon über ihre Sektion zeigt (`umwandeln.medien_verteilen()`; das Modell wiederholt den Link sonst
+nicht). Beispiel-PDF der App (`probe_layout.py 3 gase`): Video an Teil A und bei B1, B3, C3, dreimal richtig.
+**Formelprüfung nach der Umwandlung** (`app/formelcheck.py`, Test `tests/test_formeln.py`): sicher reparieren →
+Rest mit Fehlerliste gezielt ans Modell (ein Aufruf, nur die betroffenen Textfelder, Korrektur nur bei gleichem
+Wortlaut und gleichen Lücken) → was bleibt, als ⚠ «Formel prüfen». Probe am 27.09.2026 mit gpt-5.6-luna über
+Mathematik-, Gasgesetze- und Fotosynthese-PDF (je 2–3 Läufe): alles repariert oder sauber, nichts offen;
+zweiter Aufruf kostet rund 0,03 Rappen.
+**Lücke in einer Formel** («$V_2 = {{#6}}\,\text{L}$», schreibt luna in zwei von drei Läufen): der Konverter
+schliesst die Formel vor der Lücke und öffnet sie danach wieder (`olatqti.formel_um_stellen()`), sonst zeigte
+OLAT den LaTeX-Code.
 
 **Fragetyp aus dem PDF:** Steht der Typ in der Überschrift einer Aufgabe («Aufgabe 3 – Lückentext»), gilt er
 vor der Form. Das Modell meldet die Angabe in `typ_im_pdf`; weicht der gewählte Typ ab, markiert

@@ -1,0 +1,81 @@
+# Demo: zwei Teile, mehrere Sektionen, Einleitung mit Video und Bildern je Sektion.
+# In OLAT importieren und prüfen: Teil 2 erst nach Abschluss von Teil 1, Einleitung über jeder Frage
+# der Sektion, Zeitlimit 45 Min., bestanden ab 8 Punkten. Keine konfig angegeben = neutral.
+titel: DEMO Teile und Sektionen
+zeitlimit: 45          # Minuten, für den ganzen Test
+bestehen: 8            # Punkte
+teile:
+  - sektionen:
+      - titel: A – Spannungs-Dehnungs-Diagramm
+        text: |
+          Das Diagramm zeigt drei Werkstoffe im Zugversuch.
+          Es gilt für **alle Fragen dieser Sektion**.
+        bilder:
+          - {datei: bilder/s1_bild1.png, alt: Spannungs-Dehnungs-Diagramm mit drei Werkstoffen}
+        fragen:
+          - typ: sc
+            titel: A1 Höchste Festigkeit
+            frage: Welcher Werkstoff erträgt die grösste Spannung?
+            antworten:
+              - {text: hochfester Stahl, richtig: true}
+              - Baustahl
+              - Aluminium
+          - typ: sc
+            titel: A2 Grösste Dehnung
+            frage: Welcher Werkstoff dehnt sich vor dem Bruch am meisten?
+            antworten:
+              - {text: Aluminium, richtig: true}
+              - Baustahl
+              - hochfester Stahl
+          - typ: richtigfalsch
+            titel: A3 Aussagen zum Diagramm
+            punkte: 2
+            aussagen:
+              - {text: Baustahl ist fester als Aluminium., richtig: true}
+              - {text: Hochfester Stahl ist am zähesten., richtig: false}
+
+      - titel: B – Video Ideale Gase
+        text: Schauen Sie das Video an, bevor Sie die Fragen beantworten.
+        medien:
+          - https://www.youtube.com/watch?v=q2LBfTE6LI0
+        fragen:
+          - typ: dropdown
+            titel: B1 Boyle-Mariotte
+            text: Bei gleicher Temperatur wird das Volumen halbiert. Der Druck {{*verdoppelt sich|halbiert sich|bleibt gleich}}.
+          - typ: mc
+            titel: B2 Zustandsgrössen
+            frage: Welche Grössen beschreiben den Zustand eines idealen Gases?
+            antworten:
+              - {text: Druck, richtig: true}
+              - {text: Volumen, richtig: true}
+              - {text: Temperatur, richtig: true}
+              - Farbe
+
+  - sektionen:
+      - titel: C – Rückfederung
+        text: Das Bild zeigt ein gebogenes Blech vor und nach dem Entlasten.
+        bilder:
+          - {datei: bilder/s2_bild2.png, alt: Blech vor und nach dem Entlasten}
+        fragen:
+          - typ: freitext
+            titel: C1 Rückfederung erklären
+            punkte: 3
+            zeilen: 6
+            frage: Erklären Sie mit Hilfe des Spannungs-Dehnungs-Diagramms, warum das Blech zurückfedert.
+            musterloesung: Der elastische Anteil der Verformung geht beim Entlasten zurück, nur der plastische bleibt.
+
+      - titel: D – Video und Bild zusammen
+        text: |
+          Diese Sektion hat **Video und Bild** in der Einleitung.
+        medien:
+          - https://www.youtube.com/watch?v=q2LBfTE6LI0
+        bilder:
+          - {datei: bilder/s1_bild1.png, alt: Spannungs-Dehnungs-Diagramm, breite: 400, hoehe: 240}
+        fragen:
+          - typ: numerisch
+            titel: D1 Umrechnung
+            text: 1 bar entspricht {{#100000}} Pa.
+          - typ: reihenfolge
+            titel: D2 Festigkeit ordnen
+            frage: Ordnen Sie nach Festigkeit, die höchste zuerst.
+            elemente: [hochfester Stahl, Baustahl, Aluminium]

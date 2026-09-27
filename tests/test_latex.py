@@ -5,6 +5,7 @@ Hier: Dollarzeichen ohne Formel, Escape, Umlaute/Unicode im title, Antworten mit
 
     app/.venv/Scripts/python tests/test_latex.py
 """
+import re
 import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -92,6 +93,16 @@ def main() -> int:
     rep = umwandeln._latex_reparieren(f"${bs*2}frac{{p}}{{T}}$ und $a {bs*2} b$ sowie {bs*2}cdot")
     if rep != f"${bs}frac{{p}}{{T}}$ und $a {bs*2} b$ sowie {bs*2}cdot":
         fehler.append(f"Backslash-Reparatur falsch: {rep}")
+    # Lücke mitten in einer Formel (luna, 27.09.2026): Formel um die Lücke herum schliessen/öffnen
+    muster = re.compile(r"\{\{.*?\}\}")
+    for ein, soll in ((f"$V_2 = {{{{#1.5}}}}{bs},{bs}text{{L}}$", f"$V_2 =$ {{{{#1.5}}}} ${bs},{bs}text{{L}}$"),
+                      ("$x = {{#2}}$", "$x =$ {{#2}}"),
+                      ("$p_2$ = {{#3}} bar", "$p_2$ = {{#3}} bar"),
+                      (f"{bs}$ {{{{#5}}}} $a$", f"{bs}$ {{{{#5}}}} $a$"),
+                      ("$a$ $b$ {{x}}", "$a$ $b$ {{x}}"),
+                      ("$a {{x}} b$ und $c$", "$a$ {{x}} $b$ und $c$")):
+        if (ist := o.formel_um_stellen(ein, muster)) != soll:
+            fehler.append(f"formel_um_stellen({ein!r}) = {ist!r}, erwartet {soll!r}")
     for f in fehler:
         print("FEHLER", f)
     print(f"LaTeX-Test: {len(fehler)} Fehler")

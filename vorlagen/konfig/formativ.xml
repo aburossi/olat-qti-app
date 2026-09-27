@@ -1,0 +1,36 @@
+<deliveryOptions>
+  <enableCancel>true</enableCancel>
+  <enableSuspend>true</enableSuspend>
+  <displayScoreProgress>true</displayScoreProgress>
+  <displayQuestionProgress>true</displayQuestionProgress>
+  <displayMaxScoreItem>true</displayMaxScoreItem>
+  <showMenu>true</showMenu>
+  <showTitles>true</showTitles>
+  <personalNotes>false</personalNotes>
+  <hideLms>true</hideLms>
+  <hideFeedbacks>false</hideFeedbacks>
+  <blockAfterSuccess>false</blockAfterSuccess>
+  <maxAttempts>0</maxAttempts>
+  <allowAnonym>false</allowAnonym>
+  <digitalSignature>false</digitalSignature>
+  <digitalSignatureMail>false</digitalSignatureMail>
+  <showAssessmentResultsOnFinish>true</showAssessmentResultsOnFinish>
+  <enableAssessmentItemBack>false</enableAssessmentItemBack>
+  <enableAssessmentItemResetHard>false</enableAssessmentItemResetHard>
+  <enableAssessmentItemResetSoft>false</enableAssessmentItemResetSoft>
+  <enableAssessmentItemSkip>false</enableAssessmentItemSkip>
+  <passedType>cutValue</passedType>
+  <assessmentResultsOptions>
+    <metadata>true</metadata>
+    <sectionSummary>true</sectionSummary>
+    <questionSummary>true</questionSummary>
+    <userSolutions>true</userSolutions>
+    <correctSolutions>true</correctSolutions>
+    <questions>false</questions>
+  </assessmentResultsOptions>
+  <chatCoaches>false</chatCoaches>
+  <chatOwners>false</chatOwners>
+  <canStartChat>false</canStartChat>
+  <pageMode>false</pageMode>
+  <lastQuestion>false</lastQuestion>
+</deliveryOptions>

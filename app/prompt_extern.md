@@ -165,6 +165,16 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
 - Eine Aufgabe mit Unterpunkten (a, b, c …) wird entweder eine Frage oder je Unterpunkt eine Frage mit
   Titel «D1a …», «D1b …» — dann Punkte je Unterpunkt aus der Vorlage und die gemeinsame Ausgangslage
   in jede dieser Fragen kopieren.
+- Hat eine **Sektion** eine Einleitung, die für alle ihre Fragen gilt (Lesetext, Fallbeschreibung, Video-Link):
+  als `text:` (und `medien:`) bei der Sektion, neben `titel:` — OLAT zeigt sie über jeder Frage der Sektion.
+  Gilt ein Text nur für einige Fragen der Sektion («Text für die Aufgaben C1 und C2»), gehört er stattdessen
+  in die `frage` jeder dieser Fragen.
+- Teile, Zeitlimit, Bestehensgrenze und Testeinstellungen wähle ich in der App — nicht ins YAML schreiben.
+- **Antwortform der Vorlage bestimmt den Typ**, nicht das Verb: kurze Linie für Wort/Begriff → `lueckentext`,
+  für eine Zahl → `numerisch`; nummerierte Antwortlinien («1. ___ 2. ___ 3. ___») → ein `lueckentext` mit einer
+  Zeile je Linie («1. {{…}}»), bei freier Reihenfolge alle Lösungen als Varianten in jeder Lücke; mehrere Zeilen
+  für Sätze → `freitext`; Wortkasten → `dropdown` mit allen Wörtern in jeder Lücke; Paare verbinden → `matrix`;
+  Kästchen nummerieren → `reihenfolge`; im Text unterstreichen → `hottext`.
 - `mischen: true` bei einer Sektion mischt deren Fragen, bei `sc`/`mc` die Antworten — nur setzen, wenn
   ich es verlange. Standard: Reihenfolge wie geschrieben (Antworten bei sc/mc werden in OLAT gemischt).
 

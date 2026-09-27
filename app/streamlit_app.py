@@ -26,12 +26,14 @@ olatqti = importlib.reload(olatqti)
 import auth  # noqa: E402
 import zaehler  # noqa: E402
 import umwandeln  # noqa: E402
+import formelcheck  # noqa: E402
 
 st.set_page_config(page_title="OLAT-Test erstellen", page_icon="📝", layout="wide")
 
 # Der Konverter liegt ausserhalb des app-Ordners. Läuft eine alte Fassung im Speicher, entstehen still
 # falsche Pakete (22.09.2026: Formeln blieben als $…$ stehen, Bilder fehlten). Lieber hart stoppen.
-KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke", "pro_antwort")
+KONVERTER_BRAUCHT = ("inline", "js_escape", "anhaengen", "mit_bildern", "steuerzeichen", "bloecke", "pro_antwort",
+                     "formel_um_stellen")
 if fehlt := [n for n in KONVERTER_BRAUCHT if not hasattr(olatqti, n)]:
     st.error(f"Die App läuft mit einer veralteten Fassung des Konverters (fehlt: {', '.join(fehlt)}). "
              "Bitte im Terminal mit Strg+C beenden und neu starten:\n\n"
@@ -107,6 +109,7 @@ def neuer_satz(text: str, name: str, verbrauch=None, fehlende_seiten=None,
     st.session_state["fehlende_seiten"] = fehlende_seiten or []
     st.session_state["bilder"] = bilder or {}          # Dateiname -> Bytes, liegt im Zip unter bilder/
     st.session_state["bilder_ohne_frage"] = ohne_frage or []
+    st.session_state["formeln"] = None  # Ergebnis der Formelprüfung nach einer PDF-Umwandlung
     st.session_state.pop("zip", None)
 
 
@@ -300,10 +303,22 @@ def aus_pdf() -> None:
         st.info(f"Für die {zugaenge[0][1]} ist kein OpenAI-Schlüssel hinterlegt — umgewandelt über die {abrechnung}.")
     satz = umwandeln.zu_fragensatz(roh, erweitert=erweitert)
     umwandeln.pruefe_medien(satz, text)
+    umwandeln.medien_verteilen(satz)
+    # Formelprüfung: sicher reparieren, Rest einmal gezielt an das Modell, was bleibt als ⚠ markieren
+    formeln = {"repariert": formelcheck.reparieren(satz), "nachgebessert": 0, "offen": 0, "fehler": None}
+    if (rest := formelcheck.pruefen(satz)):
+        with st.spinner(f"{len(rest)} Text(e) mit Formelfehlern — {modell} bessert nach …"):
+            try:
+                formeln["nachgebessert"], v2 = formelcheck.nachbessern(OpenAI(api_key=schluessel), modell, rest)
+                verbrauch = {k: verbrauch[k] + v2[k] for k in ("eingabe", "ausgabe")}
+            except Exception as e:  # Nachbessern ist ein Zusatz — scheitert es, bleibt die Umwandlung gültig
+                formeln["fehler"] = str(e)
+        formeln["offen"] = formelcheck.markieren(formelcheck.pruefen(satz))
     ohne_frage = umwandeln.pruefe_bilder(satz, {f["name"] for f in funde})
     neuer_satz(umwandeln.als_yaml(satz), Path(pdf.name).stem,
                {**verbrauch, "modell": modell}, [s["nr"] for s in problemseiten] if not bildseiten else [],
                {f["name"]: f["daten"] for f in funde}, ohne_frage)
+    st.session_state["formeln"] = formeln
     zaehler.protokolliere(nutzer, "pdf", {**verbrauch, "modell": modell}, umwandeln.kosten(verbrauch, modell),
                           fragen=len(umwandeln.alle_fragen(satz)), seiten=anzahl, bilder=len(funde))
 
@@ -361,7 +376,10 @@ except yaml.YAMLError as e:
 
 paare = umwandeln.alle_fragen(satz)
 fragen = [f for _, f in paare]
-anzahl_sektionen = len(satz.get("sektionen") or []) or 1
+teile_im_yaml = isinstance(satz, dict) and "teile" in satz  # Aufbau selbst geschrieben → App gliedert nicht um
+sektionen = [] if teile_im_yaml or not isinstance(satz, dict) else umwandeln.sektionen_von(satz)
+anzahl_sektionen = (sum(len(umwandeln.sektionen_von(t)) for t in satz["teile"] or []) if teile_im_yaml
+                    else len(sektionen) or 1)
 v = st.session_state.get("verbrauch")
 st.subheader(f"«{satz.get('titel', '?')}» — {len(fragen)} Fragen in {anzahl_sektionen} "
              f"Sektion{'en' if anzahl_sektionen > 1 else ''}, "
@@ -391,6 +409,17 @@ if fehlend := st.session_state.get("fehlende_seiten"):
                "Fragen von dort fehlen im Test.")
 for s in satz.get("uebersprungen") or []:
     st.warning(f"Nicht übertragen: {s}")
+if (fm := st.session_state.get("formeln")) and (fm["repariert"] or fm["nachgebessert"] or fm["offen"] or fm["fehler"]):
+    teile_fm = [f"{fm['repariert']} Text(e) automatisch repariert" if fm["repariert"] else "",
+                f"{fm['nachgebessert']} vom Modell nachgebessert" if fm["nachgebessert"] else "",
+                f"{fm['offen']} Frage(n) bitte prüfen (⚠ in der Tabelle)" if fm["offen"] else ""]
+    (st.warning if fm["offen"] else st.info)("🧮 Formeln: " + ", ".join(t for t in teile_fm if t) + "."
+                                             + (f" Nachbessern fehlgeschlagen: {fm['fehler']}" if fm["fehler"] else ""))
+if isinstance(satz, dict) and (fm_rest := formelcheck.pruefen(satz)):
+    # Stand des aktuellen YAML (auch nach Bearbeiten oder eingefügt): nur melden, nichts ändern
+    with st.expander(f"🧮 {len(fm_rest)} Text(e) mit Formelfehlern — in OLAT erscheint dort LaTeX-Code"):
+        for f in fm_rest:
+            st.markdown(f"- **{f['ort']}**: " + "; ".join(f"`{b}`" for b in f["befunde"]))
 if ohne := st.session_state.get("bilder_ohne_frage"):
     st.info(f"🖼 Keiner Frage zugeordnet und deshalb nicht im Test: {', '.join(ohne)}. "
             "Gehört eines zu einer Frage, im YAML bei `bilder:` ergänzen (Pfad `bilder/<name>`).")
@@ -398,22 +427,37 @@ unsicher = [f for f in fragen if f.get("unsicher")]
 if unsicher:
     st.warning(f"{len(unsicher)} Frage(n) mit Unsicherheit — in der Tabelle markiert, bitte prüfen.")
 
-st.markdown(tabelle_mit_umbruch(
-    [{"⚠": "⚠" if f.get("unsicher") else "", "Sektion": sek, "Titel": f.get("titel"), "Typ": f.get("typ"),
-      "Punkte": f.get("punkte"), "Medien": "🎬 " * len(f.get("medien") or [])
-      + "🖼 " * len(f.get("bilder") or []),
-      "Lösung": umwandeln.loesung_kurz(f),
-      "Quelle": f.get("quelle", ""), "Unsicher": f.get("unsicher", "")} for sek, f in paare],
-    breite_spalten={"Titel", "Lösung", "Unsicher"}), unsafe_allow_html=True)
+def _medien(x: dict) -> str:
+    return "🎬 " * len(x.get("medien") or []) + "🖼 " * len(x.get("bilder") or [])
+
+
+zeilen = []
+for titel_sek, sek_ in (umwandeln.alle_sektionen(satz) if isinstance(satz, dict) else []):
+    if sek_.get("text") or sek_.get("medien") or sek_.get("bilder"):
+        # Einleitung: steht in OLAT über jeder Frage dieser Sektion
+        zeilen.append({"⚠": "⚠" if sek_.get("unsicher") else "", "Sektion": titel_sek,
+                       "Titel": "Einleitung — über jeder Frage: " + umwandeln.kurz(sek_.get("text"), 300),
+                       "Typ": "Einleitung", "Punkte": "", "Medien": _medien(sek_), "Lösung": "", "Quelle": "",
+                       "Unsicher": sek_.get("unsicher", "")})
+    for f in sek_.get("fragen") or []:
+        zeilen.append({"⚠": "⚠" if f.get("unsicher") else "", "Sektion": titel_sek, "Titel": f.get("titel"),
+                       "Typ": f.get("typ"), "Punkte": f.get("punkte"), "Medien": _medien(f),
+                       "Lösung": umwandeln.loesung_kurz(f),
+                       "Quelle": f.get("quelle", ""), "Unsicher": f.get("unsicher", "")})
+st.markdown(tabelle_mit_umbruch(zeilen, breite_spalten={"Titel", "Lösung", "Unsicher"}), unsafe_allow_html=True)
+
+# Sektionen (Einleitung) und Fragen, die Bilder tragen — für Vorschau und Gegenprobe im Zip
+bildtraeger = [(f"{t} — Einleitung", s) for t, s in (umwandeln.alle_sektionen(satz) if isinstance(satz, dict) else [])
+               if s.get("bilder")] + [(f.get("titel"), f) for _, f in paare]
 
 if st.session_state.get("bilder"):
     with st.expander("Bilder je Frage ansehen"):
-        for sek, f in paare:
+        for titel_b, f in bildtraeger:
             for b in f.get("bilder") or []:
                 name = (b["datei"] if isinstance(b, dict) else b).removeprefix("bilder/")
                 if name in st.session_state["bilder"]:
                     st.image(st.session_state["bilder"][name], width=320,
-                             caption=f"{f.get('titel')} — {b.get('alt', '') if isinstance(b, dict) else ''}")
+                             caption=f"{titel_b} — {b.get('alt', '') if isinstance(b, dict) else ''}")
 
 YAML_HILFE = """
 Jede Frage ist ein Block, der mit `- typ:` beginnt und unter `fragen:` eingerückt ist (oder unter
@@ -461,7 +505,11 @@ es hakt (meist eine fehlende Einrückung oder ein fehlendes Anführungszeichen),
 | Upload | `frage` |
 
 Bilder: `bilder: [{datei, alt}]` (Datei liegt im Zip unter `bilder/`). Medien (Video/Audio):
-`medien: ["https://…"]`. Ausführliche Beschreibung mit allen Feldern, Beispielen und Sonderfällen:
+`medien: ["https://…"]`.
+
+**Einleitung einer Sektion:** `text:`, `medien:` und `bilder:` direkt bei der Sektion (neben `titel:`) —
+OLAT zeigt sie über jeder Frage dieser Sektion. Teile, Zeitlimit, Bestehensgrenze und Konfiguration wählen
+Sie unten in «Testaufbau und Einstellungen», nicht im YAML. Ausführliche Beschreibung mit allen Feldern, Beispielen und Sonderfällen:
 README von olat-qti (`https://github.com/aburossi/olat-qti-app`).
 """
 
@@ -497,7 +545,52 @@ with st.container(border=True):
     st.caption("Gilt für Multiple Choice, Matrix, Drag and Drop, Richtig/Falsch, Hottext und Lückentexte. "
                "Single Choice, Kprim, gemischte Lücken, Hotspot und Reihenfolge haben eigene, feste Regeln. "
                "Nennt das PDF bei einer Frage etwas anderes, gilt dort das PDF.")
-yaml_gebaut = umwandeln.mit_bewertung(st.session_state["yaml"], pro_antwort, abzug)
+KONFIG_TEXT = {
+    "neutral": "Neutral — pausieren möglich, kein Feedback, keine Resultate für Lernende",
+    "formativ": "Formativ — Feedback und Punktestand, nach Abschluss Resultate mit Lösungen",
+    "summativ": "Summativ — ein Versuch, nicht pausierbar, nach Abschluss nur die Punktzahl",
+}
+gesamtpunkte = sum(float(f.get("punkte", 1)) for f in fragen)
+
+with st.container(border=True):
+    st.markdown("**Testaufbau und Einstellungen**")
+    neue_teile_ab, eine_sektion = [], False
+    if teile_im_yaml:
+        st.caption(f"Teile und Sektionen stehen im YAML ({len(satz['teile'] or [])} Teile) und werden so übernommen.")
+    elif len(sektionen) > 1:
+        eine_sektion = not st.checkbox(
+            f"Mehrere Sektionen ({len(sektionen)}, wie erkannt)", value=True, key="mehrere_sektionen",
+            on_change=_zip_veraltet,
+            help="Aus: alle Fragen in einer einzigen Sektion. Sektionen erscheinen in OLAT als Gliederung links.")
+        mehrere_teile = st.checkbox(
+            "Mehrere Teile", value=False, key="mehrere_teile", on_change=_zip_veraltet, disabled=eine_sektion,
+            help="Ein Teil wird in OLAT abgeschlossen, bevor der nächste beginnt — zurück geht es dann nicht mehr.")
+        if mehrere_teile and not eine_sektion:
+            namen = [f"{i + 1}. {s.get('titel') or 'Sektion'}" for i, s in enumerate(sektionen)]
+            ab = st.multiselect("Neuer Teil beginnt bei Sektion", namen[1:], key="teile_ab", on_change=_zip_veraltet,
+                                placeholder="Sektion wählen, mit der Teil 2 (3, …) beginnt")
+            neue_teile_ab = [namen.index(n) for n in ab]
+            if not ab:
+                st.caption("Noch keine Sektion gewählt — der Test bleibt ein Teil.")
+            else:
+                st.caption(f"→ {len(ab) + 1} Teile")
+    konfig = st.selectbox("Konfiguration", list(KONFIG_TEXT), format_func=KONFIG_TEXT.get, key="konfig",
+                          on_change=_zip_veraltet,
+                          help="Testeinstellungen in OLAT; lassen sich dort nach dem Import noch ändern.")
+    z1, z2 = st.columns(2)
+    zeitlimit = bestehen = None
+    if z1.checkbox("Zeitlimit", value=False, key="mit_zeitlimit", on_change=_zip_veraltet):
+        zeitlimit = z1.number_input("Minuten", min_value=1, max_value=600, value=45, step=5, key="zeitlimit",
+                                    on_change=_zip_veraltet)
+    if z2.checkbox("Bestehensgrenze", value=False, key="mit_bestehen", on_change=_zip_veraltet,
+                   disabled=not gesamtpunkte):
+        bestehen = z2.number_input(f"Bestanden ab … Punkten (von {gesamtpunkte:g})", min_value=0.0,
+                                   max_value=float(gesamtpunkte), value=round(gesamtpunkte * 0.6 * 2) / 2,
+                                   step=0.5, key="bestehen", on_change=_zip_veraltet)
+
+yaml_gebaut = umwandeln.mit_aufbau(st.session_state["yaml"], eine_sektion, neue_teile_ab)
+yaml_gebaut = umwandeln.mit_bewertung(yaml_gebaut, pro_antwort, abzug)
+yaml_gebaut = umwandeln.mit_einstellungen(yaml_gebaut, konfig, zeitlimit, bestehen)
 
 # ------------------------------------------------------------------ bauen
 if st.button("Zip für OLAT bauen", type="primary"):
@@ -521,7 +614,7 @@ if st.button("Zip für OLAT bauen", type="primary"):
         # Gegenprobe: jedes Bild des Fragensatzes muss im Zip stecken. Fehlte am 22.09.2026 unbemerkt,
         # weil der laufende Server einen alten Konverter ohne Bildunterstützung im Speicher hatte.
         gewollt = {(b["datei"] if isinstance(b, dict) else b).rsplit("/", 1)[-1]
-                   for _, f in paare for b in f.get("bilder") or []}
+                   for _, f in bildtraeger for b in f.get("bilder") or []}
         with zipfile.ZipFile(ziel) as zz:
             fehlend = gewollt - set(zz.namelist())
         if fehlend:
@@ -535,7 +628,11 @@ if "zip" in st.session_state:
     info = st.session_state["zip_info"]
     name = st.session_state.get("pdf_name", "test")
     typen = ", ".join(f"{k} {n}" for k, n in info["typen"].items())
-    st.success(f"Bereit: {info['fragen']} Fragen, {info['punkte']:g} Punkte ({typen}). "
+    extra = "".join([f", Zeitlimit {zeitlimit:g} Min." if zeitlimit else "",
+                     f", bestanden ab {bestehen:g} Punkten" if bestehen is not None else ""])
+    st.success(f"Bereit: {info['fragen']} Fragen, {info['punkte']:g} Punkte ({typen}) — "
+               f"{info['teile']} Teil{'e' if info['teile'] > 1 else ''}, {info['sektionen']} "
+               f"Sektion{'en' if info['sektionen'] > 1 else ''}, Konfiguration {info['konfig']}{extra}. "
                "Import: OLAT → Autorenbereich → Importieren → Zip wählen → «Test».")
     a, b = st.columns(2)
     a.download_button("Zip herunterladen", st.session_state["zip"], f"{name}.zip", "application/zip", type="primary")

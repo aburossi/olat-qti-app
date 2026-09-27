@@ -37,6 +37,11 @@ def weissraum(root) -> None:
             el.text = LEER.sub(" ", el.text)
         if el.tail:
             el.tail = LEER.sub(" ", el.tail)
+    for el in body.iter():  # Leerraum zwischen Blöcken zeigt der Browser nicht (Einzug nach Kopieren im Editor)
+        if len(el) and el[0].tag in BLOCK and el.text and not el.text.strip():
+            el.text = None
+        if el.tag in BLOCK and el.tail and not el.tail.strip():
+            el.tail = None
     for el in list(body.iter()):
         if el.tag == NS + "br":
             vor = el.getprevious()
@@ -164,7 +169,8 @@ def items_nach_titel(zip_oder_ordner) -> dict[str, bytes]:
 
 # (Fragensatz in beispiele/, Ordner in referenz/ mit den OpenOlat-Originalen)
 PAARE = [("allefragen.yaml", "allefragen"), ("hinweis.yaml", "hinweis"), ("loesung.yaml", "loesung"), ("latex.yaml", "latex"),
-         ("punkte_pro_antwort.yaml", "punkte_pro_antwort")]
+         ("punkte_pro_antwort.yaml", "punkte_pro_antwort"),
+         ("sektionen_teile.yaml", "sektionen_neutral")]
 
 
 def main() -> int:
