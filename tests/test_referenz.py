@@ -170,7 +170,8 @@ def items_nach_titel(zip_oder_ordner) -> dict[str, bytes]:
 # (Fragensatz in beispiele/, Ordner in referenz/ mit den OpenOlat-Originalen)
 PAARE = [("allefragen.yaml", "allefragen"), ("hinweis.yaml", "hinweis"), ("loesung.yaml", "loesung"), ("latex.yaml", "latex"),
          ("punkte_pro_antwort.yaml", "punkte_pro_antwort"),
-         ("sektionen_teile.yaml", "sektionen_neutral")]
+         ("sektionen_teile.yaml", "sektionen_neutral"), ("gemischt_pro_antwort.yaml", "gemischt_pro_antwort"),
+         ("essay_nocopypaste.yaml", "essay_nocopypaste")]
 
 
 def main() -> int:

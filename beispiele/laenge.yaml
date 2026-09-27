@@ -1,0 +1,24 @@
+# Textlücken mit «Erwartete Länge» und Platzhalter (laenge / platzhalter), nachgebaut aus
+# referenz/laenge/ (OpenOLAT 21.0.3, Export 27.09.2026). Für kurze Antworten in einer Lücke,
+# z. B. «Einordnen per Dropdown + in einem Satz begründen». Geprüft von tests/test_laenge.py.
+titel: DEMO Textlücken mit Länge
+fragen:
+  - typ: gemischt
+    titel: L1 Tatsache oder Bewertung
+    punkte: 2
+    laenge: 150
+    platzhalter: Ihre Antwort hier
+    frage: Tatsache oder Bewertung? Begründen Sie Ihre Wahl in einem Satz.
+    text: |
+      «Ein Liter Benzin kostet rund 2 Franken.» → {{*Tatsache|Bewertung}} \
+      Begründung: {{Ein Preis lässt sich messen und überprüfen.}}
+
+  - typ: lueckentext
+    titel: L2 Kurz erklären
+    laenge: 150
+    frage: Erklären Sie in einem Satz.
+    text: "Internationale Arbeitsteilung heisst: {{Jedes Land spezialisiert sich und importiert den Rest.}}"
+
+  - typ: lueckentext
+    titel: L3 Ohne Länge
+    text: Die Hauptstadt der Schweiz ist {{Bern}}.

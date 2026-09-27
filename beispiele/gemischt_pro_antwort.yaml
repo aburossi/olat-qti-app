@@ -1,0 +1,28 @@
+# Nachbau von referenz/GEMISCHT_PUNKTE_PRO_ANTWORT.zip (OpenOlat 21.0.2, 27.09.2026, Frage S6 der LK 4PG24a):
+# gemischter Lückentext mit Punkten pro Antwort und unterschiedlichem Gewicht je Lückenart —
+# 6 Dropdowns à 1 Punkt, 3 Textlücken à 2 Punkte, MAXSCORE 12. tests/test_referenz.py vergleicht die Frage.
+titel: GEMISCHT PUNKTE PRO ANTWORT
+fragen:
+  - typ: gemischt
+    titel: S6 Tatsache oder Bewertung
+    punkte: 12
+    punkte_dropdown: 1
+    punkte_text: 2
+    laenge: 150
+    platzhalter: Ihre Begründung in einem Satz
+    frage: Tatsache oder Bewertung? Wählen Sie bei jeder Aussage. Begründen Sie bei a), b) und c) Ihre Wahl in **einem Satz**.
+    text: |
+      a) «An vielen Schweizer Tankstellen kostet ein Liter Benzin aktuell rund 2 Franken.» (Moderation) → {{*Tatsache|Bewertung}} \
+      Begründung: {{Ein Preis lässt sich messen und überprüfen (1) – hier der Preis an der Tankstelle (1).}}
+
+      b) «Benzin ist heute erheblich günstiger als noch in den Achtzigerjahren.» (Thalmann) → {{Tatsache|*Bewertung}} \
+      Begründung: {{Eine Einschätzung, die vom Vergleichsmassstab abhängt (1) – «günstiger» gilt nur gemessen an der Kaufkraft (1).}}
+
+      c) «Für viele Autofahrerinnen und Autofahrer sind 2 Franken für einen Liter eine Art Schmerzgrenze.» (Moderation) → {{Tatsache|*Bewertung}} \
+      Begründung: {{Ein subjektives Empfinden, nicht messbar (1) – die Schmerzgrenze liegt nicht für alle gleich hoch (1).}}
+
+      d) «1981 kostete ein Liter Benzin 1.25 Franken.» (Beitrag) → {{*Tatsache|Bewertung}}
+
+      e) «Ein ähnliches Auto verbraucht heute etwa halb so viel Benzin wie vor 45 Jahren.» (Thalmann) → {{*Tatsache|Bewertung}}
+
+      f) «Ein Preis von 16 Franken wäre ein echter Anreiz, Benzin zu sparen.» (Thalmann) → {{Tatsache|*Bewertung}}

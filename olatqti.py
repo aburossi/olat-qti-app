@@ -323,7 +323,8 @@ def alles_oder_nichts(treffer: ET.Element, leer_zuerst: bool = False) -> ET.Elem
 # Eine falsche Wahl kostet standardmässig eine halbe richtige (so im Export), `abzug:` setzt es fest.
 # Unter 0 fällt die Frage nie (MINSCORE).
 
-PRO_ANTWORT = {"mc", "match", "matchdraganddrop", "matchtruefalse", "hottext", "fib", "numerical", "inlinechoice"}
+PRO_ANTWORT = {"mc", "match", "matchdraganddrop", "matchtruefalse", "hottext", "fib", "numerical", "inlinechoice",
+               "gapmixed"}  # gapmixed seit 27.09.2026 (referenz/gemischt_pro_antwort/)
 # gapmixed, hotspot, order: noch kein Export mit «Punkte pro Antwort» — bleiben bei alles oder nichts
 
 
@@ -437,7 +438,7 @@ def bau_kprim(f, ids, typ):
                *[E("mapEntry", {"mapKey": k, "mappedValue": zahl(viertel)}) for k in paare]))
     inter = E("matchInteraction", {"class": "match_krpim",  # sic, so schreibt es OpenOlat
                                    "responseIdentifier": "KPRIM_RESPONSE_1",
-                                   "shuffle": str(f.get("mischen", False)).lower(),
+                                   "shuffle": str(f.get("mischen", True)).lower(),
                                    "maxAssociations": "4"},
               E("simpleMatchSet", None, *[
                   E("simpleAssociableChoice", {"identifier": c, "matchMax": "1", "matchMin": "1"}, p(t))
@@ -607,6 +608,41 @@ def zeilen_je_absatz(text) -> list[list[str]]:
             for a in re.split(r"\n\s*\n", str(text).strip()) if a.strip()]
 
 
+def lueckenart(roh: str) -> str:
+    roh = roh.strip()
+    if roh.startswith("#"):
+        return "zahl"
+    return "dropdown" if any(o.strip().startswith("*") for o in roh.split("|")) else "text"
+
+
+GEWICHTE = {"dropdown": "punkte_dropdown", "text": "punkte_text", "zahl": "punkte_zahl"}
+
+
+def gewichte(f: dict, arten: list[str]) -> dict[str, float]:
+    """Punkte je Lückenart aus `punkte_dropdown`/`punkte_text`/`punkte_zahl`; leer, wenn keines gesetzt ist.
+    Setzt `punkte` auf die Summe — steht `punkte` selbst in der Frage und weicht ab, ist das ein Fehler."""
+    gesetzt = {art: feld for art, feld in GEWICHTE.items() if f.get(feld) is not None}
+    if not gesetzt:
+        return {}
+    fehlt = sorted({GEWICHTE[a] for a in arten} - set(gesetzt.values()))
+    if fehlt:
+        raise FehlerImFragensatz(f"«{f['titel']}»: {', '.join(fehlt)} fehlt — mit Punkten je Lückenart braucht "
+                                 "jede vorkommende Art eine Punktzahl")
+    if str(f.get("bewertung", "antwort")).lower() == "alles" and "bewertung" in f.get("_eigene", f):
+        raise FehlerImFragensatz(f"«{f['titel']}»: {', '.join(gesetzt.values())} heisst Punkte pro Antwort — "
+                                 "nicht zusammen mit bewertung: alles")
+    try:
+        gewicht = {art: float(f[feld]) for art, feld in gesetzt.items()}
+    except (TypeError, ValueError):
+        raise FehlerImFragensatz(f"«{f['titel']}»: Punkte je Lückenart müssen Zahlen sein") from None
+    summe = sum(gewicht[a] for a in arten)
+    if "punkte" in f.get("_eigene", f) and abs(float(f["punkte"]) - summe) > 1e-9:
+        teile = ", ".join(f"{arten.count(a)} × {zahl(g)} ({a})" for a, g in gewicht.items() if a in arten)
+        raise FehlerImFragensatz(f"«{f['titel']}»: punkte {f['punkte']} ≠ Summe der Lücken {zahl(summe)} ({teile})")
+    f["punkte"] = summe
+    return gewicht
+
+
 def bau_luecken(f, ids, typ):
     """Lücken im Feld `text`:
          {{Bern|Berne}}   Texteingabe, jede Variante gilt
@@ -615,13 +651,22 @@ def bau_luecken(f, ids, typ):
     fib erlaubt nur Text-, numerical nur Zahl-, inlinechoice nur Dropdown-Lücken.
     `optionen: [Mars, Venus]` hängt diese Optionen an jedes Dropdown der Frage an
     (OpenOlats «globale Antworten», referenz/punkte_pro_antwort/).
-    Mit Punkten pro Antwort zählt jede Lücke für sich (punkte / Anzahl Lücken), ohne Abzug."""
+    `laenge: 150` / `platzhalter: "…"` setzen Breite und Platzhalter aller Textlücken der Frage
+    (fib, gapmixed; referenz/laenge/) — für kurze Antworten, die in eine Lücke geschrieben werden.
+    Mit Punkten pro Antwort zählt jede Lücke für sich (punkte / Anzahl Lücken), ohne Abzug.
+    `punkte_dropdown` / `punkte_text` / `punkte_zahl`: Punkte je Lücke dieser Art (referenz/gemischt_pro_antwort/,
+    27.09.2026: 6 Dropdowns à 1, 3 Textlücken à 2) — dann immer Punkte pro Antwort, `punkte` = Summe."""
     erlaubt = {"fib": {"text"}, "numerical": {"zahl"}, "inlinechoice": {"dropdown"},
                "gapmixed": {"text", "zahl", "dropdown"}}[typ]
     gross_klein = bool(f.get("gross_klein", False))
-    teil = pro_antwort(f, typ)
     text = pflicht(f, "text")
-    je_luecke = float(f.get("punkte", 1)) / max(len(LUECKE.findall(str(text))), 1)
+    arten = [lueckenart(r) for r in LUECKE.findall(str(text))]
+    gewicht = gewichte(f, arten)
+    teil = True if gewicht else pro_antwort(f, typ)
+    je_luecke = float(f.get("punkte", 1)) / max(len(arten), 1)
+
+    def pkt(art: str) -> float:  # Punkte einer Lücke dieser Art
+        return gewicht[art] if gewicht else je_luecke
     decls, bedingungen, einzeln = [], [], []  # einzeln: Bewertung je Lücke (Punkte pro Antwort)
     globale = [(ids("global-1-", 32), str(o)) for o in f.get("optionen") or []]
     global_nr = [int(ids("", 10), 16) % 10**11 for _ in globale]
@@ -631,12 +676,7 @@ def bau_luecken(f, ids, typ):
         nonlocal n_dropdown
         resp = f"RESPONSE_{n}"
         roh = m[1].strip()
-        if roh.startswith("#"):
-            art = "zahl"
-        elif any(o.strip().startswith("*") for o in roh.split("|")):
-            art = "dropdown"
-        else:
-            art = "text"
+        art = lueckenart(roh)
         if art not in erlaubt:
             raise FehlerImFragensatz(f"«{f['titel']}»: Lücke {{{{{roh}}}}} ist {art}, in {typ} nicht erlaubt")
         punkte_var = E("setOutcomeValue", {"identifier": f"SCORE_{resp}"}, E("mapResponse", {"identifier": resp}))
@@ -645,12 +685,18 @@ def bau_luecken(f, ids, typ):
             # alles oder nichts: -1.0 aus dem Mapping heisst bei OpenOlat «eine gültige Variante getroffen»
             decls.append(E("responseDeclaration", {"identifier": resp, "cardinality": "single", "baseType": "string"},
                            E("correctResponse", None, value(varianten[0])),
-                           mapping(((v, je_luecke if teil else -1) for v in varianten),
+                           mapping(((v, pkt(art) if teil else -1) for v in varianten),
                                    caseSensitive=str(gross_klein).lower())))
             bedingungen.append(E("match", None, E("baseValue", {"baseType": "float"}, text="-1.0"),
                                  E("mapResponse", {"identifier": resp})))
             einzeln.append(punkte_var)
-            return E("textEntryInteraction", {"class": "", "responseIdentifier": resp, "placeholderText": ""})
+            # laenge/platzhalter gelten für alle Textlücken der Frage — so schreibt OpenOLAT 21.0.3
+            # «Erwartete Länge» und «Platzhalter» (referenz/laenge/, Export 27.09.2026)
+            attr = {"class": "", "responseIdentifier": resp}
+            if f.get("laenge"):
+                attr["expectedLength"] = str(int(f["laenge"]))
+            attr["placeholderText"] = str(f.get("platzhalter") or "")
+            return E("textEntryInteraction", attr)
         if art == "zahl":
             # Dezimalkomma wie in Schweizer Unterlagen ({{#8,314±0,001}}) gilt wie ein Punkt
             m = re.fullmatch(r"#\s*(-?\d+(?:[.,]\d+)?)\s*(?:(?:±|\+-)\s*(\d+(?:[.,]\d+)?))?", roh)
@@ -672,7 +718,7 @@ def bau_luecken(f, ids, typ):
             bedingungen.append(gleich())
             einzeln.append(E("responseCondition", None, E("responseIf", None, gleich(),
                              E("setOutcomeValue", {"identifier": f"SCORE_{resp}"},
-                               E("baseValue", {"baseType": "float"}, text=zahl(je_luecke))))))
+                               E("baseValue", {"baseType": "float"}, text=zahl(pkt(art)))))))
             return E("textEntryInteraction", {"responseIdentifier": resp})
         optionen = [o.strip() for o in roh.split("|")]
         richtige = [o for o in optionen if o.startswith("*")]
@@ -685,7 +731,7 @@ def bau_luecken(f, ids, typ):
         decl = E("responseDeclaration", {"identifier": resp, "cardinality": "single", "baseType": "identifier"},
                  E("correctResponse", None, value(oid[richtige[0]])))
         if teil:
-            decl.append(mapping((i, je_luecke if i == oid[richtige[0]] else 0) for i, _ in wahl))
+            decl.append(mapping((i, pkt(art) if i == oid[richtige[0]] else 0) for i, _ in wahl))
         decls.append(decl)
         bedingungen.append(ist_richtig(resp))
         einzeln.append(punkte_var)
@@ -800,7 +846,9 @@ def bau_offen(f, ids, typ, bilder):
     base = "string" if typ == "essay" else "file"
     decl = E("responseDeclaration", {"identifier": "RESPONSE_1", "cardinality": "single", "baseType": base})
     if typ == "essay":
-        a = {"class": "", "responseIdentifier": "RESPONSE_1", "minStrings": "0"}
+        # einfuegen: false → OLAT sperrt Kopieren/Einfügen im Antwortfeld (referenz/essay_nocopypaste/)
+        a = {"class": "" if f.get("einfuegen", True) else "essay-nocopypaste", "responseIdentifier": "RESPONSE_1",
+             "minStrings": "0"}
         if f.get("zeilen"):
             a["expectedLines"] = str(f["zeilen"])
         inter = E("extendedTextInteraction", a)
@@ -1039,7 +1087,7 @@ def teile(satz: dict) -> list[list[dict]]:
             raise FehlerImFragensatz(f"Teil {i}: `sektionen` oder `fragen` fehlt")
         seks = [dict(s) for s in sektionen(teil)]
         for sek in seks:
-            for feld in ("bewertung", "abzug"):
+            for feld in ("bewertung", "abzug", "einfuegen"):
                 if feld not in sek and feld in teil:
                     sek[feld] = teil[feld]
         out.append(seks)
@@ -1189,6 +1237,8 @@ def baue_paket(yaml_pfad: Path, ziel: Path) -> dict:
             for f in pflicht(sek, "fragen"):
                 f = dict(f, _eigene=set(f))  # _eigene: was in der Frage selbst steht, nicht geerbt
                 f.setdefault("bewertung", sek.get("bewertung", satz.get("bewertung", "antwort")))
+                if "einfuegen" not in f and sek.get("einfuegen", satz.get("einfuegen")) is not None:
+                    f["einfuegen"] = sek.get("einfuegen", satz.get("einfuegen"))  # einfuegen: false für den ganzen Test
                 if f.get("abzug") is None and sek.get("abzug", satz.get("abzug")) is not None:
                     f["abzug"] = sek.get("abzug", satz.get("abzug"))  # z. B. abzug: 0 für den ganzen Test
                 typ, datei, datei_id, root, punkte, interaktionen = baue_frage(f, ids, bilder)

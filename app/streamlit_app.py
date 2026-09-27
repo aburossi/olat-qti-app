@@ -110,6 +110,7 @@ def neuer_satz(text: str, name: str, verbrauch=None, fehlende_seiten=None,
     st.session_state["bilder"] = bilder or {}          # Dateiname -> Bytes, liegt im Zip unter bilder/
     st.session_state["bilder_ohne_frage"] = ohne_frage or []
     st.session_state["formeln"] = None  # Ergebnis der Formelprüfung nach einer PDF-Umwandlung
+    st.session_state["nicht_uebernommen"] = []  # Sätze aus dem PDF, die im Fragensatz fehlen
     st.session_state.pop("zip", None)
 
 
@@ -319,6 +320,7 @@ def aus_pdf() -> None:
                {**verbrauch, "modell": modell}, [s["nr"] for s in problemseiten] if not bildseiten else [],
                {f["name"]: f["daten"] for f in funde}, ohne_frage)
     st.session_state["formeln"] = formeln
+    st.session_state["nicht_uebernommen"] = umwandeln.nicht_uebernommen(text, satz)
     zaehler.protokolliere(nutzer, "pdf", {**verbrauch, "modell": modell}, umwandeln.kosten(verbrauch, modell),
                           fragen=len(umwandeln.alle_fragen(satz)), seiten=anzahl, bilder=len(funde))
 
@@ -383,7 +385,7 @@ anzahl_sektionen = (sum(len(umwandeln.sektionen_von(t)) for t in satz["teile"] o
 v = st.session_state.get("verbrauch")
 st.subheader(f"«{satz.get('titel', '?')}» — {len(fragen)} Fragen in {anzahl_sektionen} "
              f"Sektion{'en' if anzahl_sektionen > 1 else ''}, "
-             f"{sum(float(f.get('punkte', 1)) for f in fragen):g} Punkte")
+             f"{sum(umwandeln.punkte_von(f) for f in fragen):g} Punkte")
 if v:
     modell = v.get("modell", "?")
     betrag = umwandeln.kosten(v, modell)
@@ -420,6 +422,12 @@ if isinstance(satz, dict) and (fm_rest := formelcheck.pruefen(satz)):
     with st.expander(f"🧮 {len(fm_rest)} Text(e) mit Formelfehlern — in OLAT erscheint dort LaTeX-Code"):
         for f in fm_rest:
             st.markdown(f"- **{f['ort']}**: " + "; ".join(f"`{b}`" for b in f["befunde"]))
+if fehlt := st.session_state.get("nicht_uebernommen"):
+    with st.expander(f"⚠ {len(fehlt)} Satz/Sätze aus dem PDF fehlen im Test — bitte prüfen", expanded=True):
+        st.caption("Das Modell hat diese Stellen nicht übernommen (z. B. einen Lesetext für einzelne Aufgaben). "
+                   "Gehören sie dazu, im YAML bei der Frage (`frage:`) oder als Einleitung der Sektion (`text:`) ergänzen.")
+        for x in fehlt:
+            st.markdown(f"- {x}")
 if ohne := st.session_state.get("bilder_ohne_frage"):
     st.info(f"🖼 Keiner Frage zugeordnet und deshalb nicht im Test: {', '.join(ohne)}. "
             "Gehört eines zu einer Frage, im YAML bei `bilder:` ergänzen (Pfad `bilder/<name>`).")
@@ -441,7 +449,7 @@ for titel_sek, sek_ in (umwandeln.alle_sektionen(satz) if isinstance(satz, dict)
                        "Unsicher": sek_.get("unsicher", "")})
     for f in sek_.get("fragen") or []:
         zeilen.append({"⚠": "⚠" if f.get("unsicher") else "", "Sektion": titel_sek, "Titel": f.get("titel"),
-                       "Typ": f.get("typ"), "Punkte": f.get("punkte"), "Medien": _medien(f),
+                       "Typ": f.get("typ"), "Punkte": f"{umwandeln.punkte_von(f):g}", "Medien": _medien(f),
                        "Lösung": umwandeln.loesung_kurz(f),
                        "Quelle": f.get("quelle", ""), "Unsicher": f.get("unsicher", "")})
 st.markdown(tabelle_mit_umbruch(zeilen, breite_spalten={"Titel", "Lösung", "Unsicher"}), unsafe_allow_html=True)
@@ -501,7 +509,8 @@ es hakt (meist eine fehlende Einrückung oder ein fehlendes Anführungszeichen),
 | Zahl (`numerical`) | `text` mit `{{#100}}` oder mit Toleranz `{{#100±0.5}}` |
 | Dropdown (`inlinechoice`) | `text` mit `{{*richtig\\|falsch}}` — `*` markiert die richtige Option |
 | Hottext | `text` mit `[[Wort]]`, richtige als `[[*Wort]]` |
-| Freitext (`essay`) | `frage`, dazu `musterloesung` |
+| Freitext (`essay`) | `frage`, dazu `musterloesung`; `einfuegen: false` sperrt Kopieren/Einfügen |
+| Gemischt (`gapmixed`) | alle Lückenarten; Punkte je Lückenart mit `punkte_dropdown: 1`, `punkte_text: 2` (dann `punkte` weglassen), `laenge: 150` für eine Begründungslücke |
 | Upload | `frage` |
 
 Bilder: `bilder: [{datei, alt}]` (Datei liegt im Zip unter `bilder/`). Medien (Video/Audio):
@@ -542,15 +551,16 @@ with st.container(border=True):
         on_change=_zip_veraltet, disabled=not pro_antwort,
         help="Ohne Abzug bringt «alles ankreuzen» bei Multiple Choice die volle Punktzahl. "
              "Unter 0 fällt eine Frage nie. Bei Lücken gibt es nie Abzug.")
-    st.caption("Gilt für Multiple Choice, Matrix, Drag and Drop, Richtig/Falsch, Hottext und Lückentexte. "
-               "Single Choice, Kprim, gemischte Lücken, Hotspot und Reihenfolge haben eigene, feste Regeln. "
+    st.caption("Gilt für Multiple Choice, Matrix, Drag and Drop, Richtig/Falsch, Hottext und alle Lückentexte "
+               "(auch gemischte). Vergibt das PDF je Lückenart eigene Punkte (z. B. Wahl 1 P., Begründung 2 P.), "
+               "gelten diese. Single Choice, Kprim, Hotspot und Reihenfolge haben eigene, feste Regeln. "
                "Nennt das PDF bei einer Frage etwas anderes, gilt dort das PDF.")
 KONFIG_TEXT = {
     "neutral": "Neutral — pausieren möglich, kein Feedback, keine Resultate für Lernende",
     "formativ": "Formativ — Feedback und Punktestand, nach Abschluss Resultate mit Lösungen",
     "summativ": "Summativ — ein Versuch, nicht pausierbar, nach Abschluss nur die Punktzahl",
 }
-gesamtpunkte = sum(float(f.get("punkte", 1)) for f in fragen)
+gesamtpunkte = sum(umwandeln.punkte_von(f) for f in fragen)
 
 with st.container(border=True):
     st.markdown("**Testaufbau und Einstellungen**")
@@ -577,6 +587,11 @@ with st.container(border=True):
     konfig = st.selectbox("Konfiguration", list(KONFIG_TEXT), format_func=KONFIG_TEXT.get, key="konfig",
                           on_change=_zip_veraltet,
                           help="Testeinstellungen in OLAT; lassen sich dort nach dem Import noch ändern.")
+    einfuegen = not st.checkbox(
+        "Einfügen in Freitexten sperren (kein Copy-Paste)", value=False, key="einfuegen_sperren",
+        on_change=_zip_veraltet, disabled=not any(str(f.get("typ")) in ("essay", "freitext") for f in fragen),
+        help="Lernende können in Freitext-Antworten nichts einfügen — sie müssen selbst schreiben. "
+             "Eine Frage mit «einfuegen: true» im YAML bleibt offen.")
     z1, z2 = st.columns(2)
     zeitlimit = bestehen = None
     if z1.checkbox("Zeitlimit", value=False, key="mit_zeitlimit", on_change=_zip_veraltet):
@@ -590,7 +605,7 @@ with st.container(border=True):
 
 yaml_gebaut = umwandeln.mit_aufbau(st.session_state["yaml"], eine_sektion, neue_teile_ab)
 yaml_gebaut = umwandeln.mit_bewertung(yaml_gebaut, pro_antwort, abzug)
-yaml_gebaut = umwandeln.mit_einstellungen(yaml_gebaut, konfig, zeitlimit, bestehen)
+yaml_gebaut = umwandeln.mit_einstellungen(yaml_gebaut, konfig, zeitlimit, bestehen, einfuegen)
 
 # ------------------------------------------------------------------ bauen
 if st.button("Zip für OLAT bauen", type="primary"):

@@ -1,0 +1,24 @@
+# Nachbau von referenz/ESSAY_NOCOPYPASTE.zip (OpenOlat 21.0.2, 27.09.2026, Frage S8 der LK 4PG24a):
+# Freitext mit gesperrtem Einfügen (einfuegen: false → class="essay-nocopypaste") und Musterlösung.
+# tests/test_referenz.py vergleicht die Frage.
+titel: ESSAY NOCOPYPASTE
+fragen:
+  - typ: freitext
+    titel: S8 Thalmanns Vergleich beurteilen
+    punkte: 12
+    zeilen: 10
+    einfuegen: false
+    frage: |
+      Thalmann sagt: Gemessen am **Durchschnittseinkommen** gehört die Schweiz zu den Ländern mit den günstigsten Benzinpreisen. Beurteilen Sie diesen Vergleich.
+
+      - a) Was zeigt der Vergleich? (3 P.)
+      - b) Für wen trifft er weniger zu? Nennen Sie eine Gruppe und erklären Sie, warum ein Durchschnitt sie nicht abbildet. (4 P.)
+      - c) Überzeugt Sie der Vergleich als Antwort auf die Frage, ob 2 Franken zu viel sind? Begründen Sie Ihr Urteil. (5 P.)
+    musterloesung: |
+      **a) (3)** Gemessen am **Einkommen** (1) belastet Benzin die Schweizer Haushalte **wenig** (1); in anderen Ländern stärker, z. B. **Vietnam achtmal so stark** (1) – auch eine andere Aussage aus dem Beitrag zählt.
+
+      **b) (4)** Eine **Gruppe** genannt (1), z. B. Lernende mit Lehrlingslohn, Menschen mit tiefem Einkommen, Pendelnde ohne guten ÖV, Betriebe mit vielen Fahrten. Ein **Durchschnitt verdeckt Unterschiede** (1). Warum diese Gruppe den Preis stärker spürt: **kleiner Lohn** oder **viele Kilometer** (1). **Bezug auf den Beitrag:** wie sehr der Preis schmerzt, sei «**eine individuelle Frage**» (1).
+
+      **c) (5)** Klares **Urteil** (1). Zwei tragfähige **Gründe** mit Bezug auf a) oder b) (1.5) + (1.5). **Bezug auf den Beitrag** mit Quelle (1). Ja und Nein gleichwertig.
+
+      Beispiel: «Der Vergleich überzeugt nur teilweise (1). Er zeigt, dass Benzin für die Schweiz als Ganzes günstig ist (1.5). Für eine Lernende, die jeden Tag mit dem Auto zur Arbeit fährt, sagt er aber wenig aus – ihr Lohn ist kein Durchschnittslohn (1.5). Thalmann sagt selbst, wie sehr der Preis schmerze, sei eine individuelle Frage (1).»

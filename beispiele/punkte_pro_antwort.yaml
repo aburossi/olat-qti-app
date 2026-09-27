@@ -20,6 +20,7 @@ fragen:
       - Lila
 
   - typ: kprim
+    mischen: false  # Referenzexport: Aussagen nicht gemischt (Standard seit 27.09.2026: gemischt)
     titel: Kprim
     punkte: 3
     frage: Kreuzen Sie an, ob die folgenden Aussagen zur Schweiz richtig oder falsch sind.
@@ -75,6 +76,7 @@ fragen:
       Der {{*Mond}}dreht sich um die Erde.
 
   - typ: gapmixed
+    bewertung: alles  # Referenzexport: alles oder nichts
     titel: Lückentext gemischt
     optionen: [Multiplikation, Substraktion]
     text: |

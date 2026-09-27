@@ -109,7 +109,7 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
         text: |
           Federt ein Werkstoff vollständig zurück, ist die Verformung {{*elastisch|plastisch}}.           Bleibt er verformt, ist sie {{*plastisch|elastisch}}.
 
-      - typ: gemischt           # alle drei Lückenarten in einem Text
+      - typ: gemischt           # alle drei Lückenarten in einem Text; laenge: 150 = breite Textlücke für einen Satz
         titel: B4 Stahl
         punkte: 2
         text: Stahl enthält unter {{#2.06}} % Kohlenstoff und ist {{*umformbar|spröde}}. Er gehört zu den {{Eisenwerkstoffen}}.
@@ -176,7 +176,8 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
   für Sätze → `freitext`; Wortkasten → `dropdown` mit allen Wörtern in jeder Lücke; Paare verbinden → `matrix`;
   Kästchen nummerieren → `reihenfolge`; im Text unterstreichen → `hottext`.
 - `mischen: true` bei einer Sektion mischt deren Fragen, bei `sc`/`mc` die Antworten — nur setzen, wenn
-  ich es verlange. Standard: Reihenfolge wie geschrieben (Antworten bei sc/mc werden in OLAT gemischt).
+  ich es verlange. Standard: Reihenfolge wie geschrieben (Antworten bei sc/mc und Aussagen bei kprim werden in
+  OLAT gemischt; `mischen: false` bei der Frage, wenn die Reihenfolge zählt).
 
 ## Regeln zum Format
 
@@ -193,7 +194,13 @@ sektionen:                      # Teile des Tests; ohne Gliederung genau eine Se
   Aussagen und Lücken (Teilpunkte; eine falsche Wahl kostet eine halbe richtige, nie unter 0). Nennt die
   Vorlage einen anderen Abzug je falsche Antwort: `abzug: <Punkte>`. Gibt es laut Vorlage Punkte nur für
   eine ganz richtige Antwort: `bewertung: alles` bei dieser Frage (oder ganz oben für den ganzen Test).
-  `gemischt`, `reihenfolge`, `sc` und `kprim` haben eigene Regeln — dort weder `bewertung` noch `abzug` setzen.
+  `reihenfolge`, `sc` und `kprim` haben eigene Regeln — dort weder `bewertung` noch `abzug` setzen. Bei
+  Lückentypen nie `abzug`.
+- **Unterschiedliche Punkte je Lückenart** (z. B. «je Wahl 1 P., je Begründung 2 P.») bei `gemischt`,
+  `lueckentext`, `dropdown`, `numerisch`: `punkte_dropdown: 1`, `punkte_text: 2` (`punkte_zahl` für Zahl-Lücken)
+  = Punkte je Lücke dieser Art; jede vorkommende Art braucht ihre Zahl, `punkte` = die Summe. Eine Textlücke,
+  in die ein ganzer Satz gehört: `laenge: 150`, die Musterlösung als Inhalt der Lücke.
+- Kopieren/Einfügen bei Freitexten sperre ich in der App — `einfuegen` nicht selbst setzen.
 - Dropdown (`dropdown`, `gemischt`): Optionen, die in **jedem** Dropdown der Frage stehen sollen, einmal als
   `optionen: [A, B]` bei der Frage statt in jeder Lücke. Mehrzeiliger Lückentext als `|`-Block;
   Zeilenumbruch in einer Lücken- oder Hottext-Zeile mit `\` am Zeilenende.

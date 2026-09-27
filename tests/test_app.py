@@ -220,6 +220,50 @@ def main() -> int:
     satz_v["sektionen"][1]["fragen"][1]["medien"] = ["https://youtu.be/anders"]
     if umwandeln.medien_verteilen(satz_v) != 0:
         fehler.append("medien_verteilen verteilt trotz zwei verschiedener Links")
+    # Punkte je Lückenart aus dem Modell (27.09.2026): Gewichte ins YAML, punkte rechnet olatqti als Summe
+    roh_g = {k: None for k in umwandeln.FRAGE["properties"]} | {
+        "typ": "gapmixed", "titel": "S6 X", "punkte": 3, "punkte_dropdown": 1, "punkte_text": 2, "laenge": 150,
+        "text": "a) «A» → {{*Tatsache|Bewertung}} \\\nBegründung: {{Weil messbar.}}"}
+    g = umwandeln._frage(roh_g)
+    if (g.get("punkte_dropdown"), g.get("punkte_text"), g.get("laenge"), "punkte" in g) != (1, 2, 150, False) \
+            or umwandeln.punkte_von(g) != 3:
+        fehler.append(f"_frage mit Gewichten: {g}")
+    # Gewicht für eine Art, die es nicht gibt, fällt weg; fehlt eins für eine vorhandene Art: gleichmässig
+    g2 = umwandeln._frage(roh_g | {"punkte_text": None})
+    if "punkte_dropdown" in g2 or g2.get("punkte") != 3:
+        fehler.append(f"_frage mit unvollständigen Gewichten: {g2}")
+    # Zeilenwechsel im Lückentext bleiben (das Modell lässt das \ weg), Absätze bleiben Absätze
+    roh_z = roh_g | {"punkte_dropdown": None, "punkte_text": None,
+                     "text": "a) A → {{*T|B}}\nBegründung: {{x}}\n\nb) B → {{T|*B}} \\\nBegründung: {{y}}\n  \n1. {{p}}\n2. {{q}}"}
+    soll_z = "a) A → {{*T|B}} \\\nBegründung: {{x}}\n\nb) B → {{T|*B}} \\\nBegründung: {{y}}\n\n1. {{p}} \\\n2. {{q}}"
+    if (ist_z := umwandeln._frage(roh_z)["text"]) != soll_z:
+        fehler.append(f"Zeilen im Lückentext: {ist_z!r}")
+    # Sätze aus dem PDF, die im Fragensatz fehlen (Lesetext für einzelne Aufgaben ging verloren)
+    pdf_t = ("--- Seite 1 ---\n**Teil C – Kunststoffe**\nThermoplaste lassen sich beim Erwärmen wieder formen, "
+             "Duroplaste dagegen nicht.\n**C1 (2 Punkte)**\nUnterstreichen Sie im folgenden Satz die zwei "
+             "Kunststoffarten.\n☐ Eisen\nLösung: Thermoplaste und Duroplaste werden nach ihrem Verhalten "
+             "beim Erwärmen unterschieden.\nDeutsch · 30 Minuten · Total 12 Punkte und noch mehr Wörter hier")
+    satz_t = {"titel": "x", "fragen": [{"typ": "hottext", "frage": "Unterstreichen Sie im folgenden Satz die "
+                                                                   "zwei Kunststoffarten.", "text": "[[*A]]"}]}
+    if umwandeln.nicht_uebernommen(pdf_t, satz_t) != ["Thermoplaste lassen sich beim Erwärmen wieder formen, "
+                                                      "Duroplaste dagegen nicht."]:
+        fehler.append(f"nicht_uebernommen: {umwandeln.nicht_uebernommen(pdf_t, satz_t)}")
+    # «Einfügen sperren» in der App → essay-nocopypaste im Zip
+    at6 = neu()
+    at6.session_state["yaml"] = beispiel
+    at6.session_state["pdf_name"] = "test"
+    at6.run()
+    at6.checkbox(key="einfuegen_sperren").set_value(True)
+    at6.run()
+    next(b for b in at6.button if b.label == "Zip für OLAT bauen").click()
+    at6.run()
+    if "zip" not in at6.session_state:
+        fehler.append(f"Einfügen sperren: kein Zip ({[e.value for e in at6.error]})")
+    else:
+        with zipfile.ZipFile(io.BytesIO(at6.session_state["zip"])) as z:
+            essays = [d for n in z.namelist() if n.startswith("essay") and (d := z.read(n).decode("utf-8"))]
+        if not essays or not all('class="essay-nocopypaste"' in d for d in essays):
+            fehler.append("Einfügen sperren: Freitexte ohne essay-nocopypaste")
     if "Stoﬀ ﬁx".translate(umwandeln.LIGATUREN) != "Stoff fix":
         fehler.append("Ligaturen nicht aufgelöst")
     selbst = "titel: x\nteile:\n  - fragen: [{typ: essay, frage: a}]\n"

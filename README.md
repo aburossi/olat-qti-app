@@ -41,8 +41,8 @@ Felder) ignoriert der Konverter; sie landen nie im Paket.
 
 `referenz/allefragen/` ist ein echter Export aus OpenOlat 21.0.2 mit allen 16
 Fragetypen (22.09.2026). Das Skript baut diesen Export nach; der Test vergleicht
-jede Frage nach Normalisierung der Identifikatoren — derzeit 52/52 identisch (16 Typen + Hinweis + Musterlösung
-+ LaTeX + derselbe Satz mit «Punkte pro Antwort», `referenz/punkte_pro_antwort/`, 23.09.2026, + derselbe in Teilen und Sektionen, `referenz/sektionen_neutral/`, 27.09.2026).
+jede Frage nach Normalisierung der Identifikatoren — derzeit 54/54 identisch (16 Typen + Hinweis + Musterlösung
++ LaTeX + derselbe Satz mit «Punkte pro Antwort», `referenz/punkte_pro_antwort/`, 23.09.2026, + derselbe in Teilen und Sektionen, `referenz/sektionen_neutral/`, 27.09.2026, + gemischt mit Punkten je Lückenart und Freitext mit gesperrtem Einfügen, `referenz/gemischt_pro_antwort/`, `referenz/essay_nocopypaste/`, 27.09.2026).
 Die Normalisierung ignoriert, was nur der OLAT-Editor zufällig hinterlässt: Leerraum wie im Browser,
 die Reihenfolge der Deklarationen je Lücke, die Kennung neu eingefügter Lücken, die Reihenfolge
 gemischter Dropdown-Optionen.
@@ -102,17 +102,17 @@ Feedback aus (`hideFeedbacks`) — ob das auch den Hinweis-Knopf bei Freitext ve
 | typ (OpenOlat) | Alias | Felder |
 |---|---|---|
 | `sc` / `mc` | einfachauswahl / mehrfachauswahl | `antworten`, `mischen` (Std. ja) |
-| `kprim` | | genau 4 `aussagen` mit `richtig` |
+| `kprim` | | genau 4 `aussagen` mit `richtig`; `mischen` (Std. ja seit 27.09.2026 — nur die Aussagen, die Spalten +/− bleiben) |
 | `match` / `matchdraganddrop` | matrix / dragdrop | `zeilen`, `spalten`, `loesung: {Zeile: Spalte}` oder `{Zeile: [Sp1, Sp2]}` |
 | `matchtruefalse` | richtigfalsch | `aussagen` mit `richtig` |
-| `fib` | lueckentext | `text` mit `{{Bern\|Berne}}` — jede Variante gilt; `gross_klein: true` |
+| `fib` | lueckentext | `text` mit `{{Bern\|Berne}}` — jede Variante gilt; `gross_klein: true`; `laenge: 150`, `platzhalter` |
 | `numerical` | numerisch | `text` mit `{{#100}}` oder `{{#100±0.5}}` |
 | `inlinechoice` | dropdown | `text` mit `{{*Sonne\|Mond}}` — `*` = richtig; `optionen: [Mars, Venus]` hängt Optionen an jedes Dropdown |
-| `gapmixed` | gemischt | alle drei Lückenarten gemischt |
+| `gapmixed` | gemischt | alle drei Lückenarten gemischt; `laenge`, `platzhalter` für die Textlücken; `punkte_dropdown`/`punkte_text`/`punkte_zahl` |
 | `hottext` | | `text` mit `[[Wort]]`, richtige als `[[*Wort]]`; Stellen dürfen direkt aneinander stehen |
 | `hotspot` | | `bild`, `bereiche: [{form: circle\|rect\|poly, koord: "x,y,r", richtig}]`, `breite`/`hoehe` (bei PNG automatisch) |
 | `order` | reihenfolge | `elemente` in richtiger Reihenfolge |
-| `essay` | freitext | `frage`, optional `zeilen` |
+| `essay` | freitext | `frage`, optional `zeilen`; `einfuegen: false` sperrt Kopieren/Einfügen |
 | `upload` | | `frage` |
 | `drawing` | zeichnen | `frage`, optional `bild` (sonst weisse Fläche 500×350) |
 
@@ -126,7 +126,7 @@ der Frage und wird gleichmässig verteilt:
 | mc, hottext | `punkte` / Anzahl richtige | −½ davon |
 | matrix, dragdrop | `punkte` / Anzahl richtiger Zuordnungen | −½ davon (jede falsche Zelle) |
 | richtigfalsch | `punkte` / Anzahl Aussagen | −½ davon; unbeantwortet 0 |
-| lueckentext, numerisch, dropdown | `punkte` / Anzahl Lücken, je Lücke für sich | 0 |
+| lueckentext, numerisch, dropdown, gemischt | `punkte` / Anzahl Lücken, je Lücke für sich — oder je Lückenart `punkte_dropdown`/`punkte_text`/`punkte_zahl` | 0 |
 
 `abzug: 0.5` setzt die Punkte je falsche Antwort fest (0 = kein Abzug), bei der Frage, der Sektion
 oder oben für den ganzen Test. **In der App** wählt die Lehrperson vor dem Bauen «Punkte pro richtige
@@ -134,9 +134,34 @@ Antwort» oder «nur, wenn alles richtig ist» und ob falsche Antworten abziehen
 `bewertung:`/`abzug:` oben ins YAML (`umwandeln.mit_bewertung()`), Angaben bei einzelnen Fragen gehen vor. Die Frage fällt nie unter 0.
 Beispiel mc mit 2 richtigen und 1 falschen, 1 Punkt: eine richtige gewählt = 0.5, alles angekreuzt = 0.75.
 `bewertung: alles` schaltet zurück auf OpenOlats Standard (volle Punkte nur bei ganz richtig).
-sc, kprim (eigene Halbpunkt-Regel), freitext/upload/zeichnen sind davon nicht betroffen. **gemischt,
-hotspot, reihenfolge bleiben bei alles oder nichts**, bis ein Export zeigt, wie OpenOlat sie pro Antwort schreibt;
+sc, kprim (eigene Halbpunkt-Regel), freitext/upload/zeichnen sind davon nicht betroffen. **Hotspot und
+reihenfolge bleiben bei alles oder nichts**, bis ein Export zeigt, wie OpenOlat sie pro Antwort schreibt;
 `bewertung: antwort` direkt an einer solchen Frage bricht den Build ab.
+
+**Punkte je Lückenart** (27.09.2026, nachgebaut aus `referenz/gemischt_pro_antwort/`, Frage S6 der LK 4PG24a,
+`beispiele/gemischt_pro_antwort.yaml`, Regeln in `tests/test_gewichte.py`): `punkte_dropdown: 1`, `punkte_text: 2`,
+`punkte_zahl: …` = Punkte **je Lücke** dieser Art. Dann gilt für die Frage immer Punkte pro Antwort (auch wenn
+oben `bewertung: alles` steht; `bewertung: alles` an der Frage selbst ist ein Fehler), und `punkte` ist die Summe —
+weglassen oder richtig angeben, sonst bricht der Build ab. Jede Lückenart, die vorkommt, braucht ihre Zahl.
+Typischer Fall: je Aussage ein Dropdown «Tatsache/Bewertung» (1 P.), darunter «Begründung: {{…}}» (2 P.).
+Richtiges Dropdown = seine Punkte, falsches = 0, kein Abzug. Geht auch bei lueckentext, dropdown, numerisch.
+**Seit 27.09.2026 auch `gemischt` pro Antwort** (vorher immer alles oder nichts): ohne Gewichte gleichmässig
+verteilt wie bei lueckentext; `bewertung: alles` schaltet zurück. **Ungeprüft in OLAT:** Zahl-Lücken in `gemischt`
+mit Punkten pro Antwort — gebaut nach dem Muster von `numerical` (dort in OLAT geprüft), der Export zeigt nur
+Dropdown- und Textlücken.
+
+**Einfügen sperren** (27.09.2026, `referenz/essay_nocopypaste/`, Frage S8, `beispiele/essay_nocopypaste.yaml`):
+`einfuegen: false` bei `freitext` → `class="essay-nocopypaste"`, Lernende können nichts ins Antwortfeld einfügen.
+Wie `bewertung` auch oben für den ganzen Test, am Teil oder an der Sektion; eine Frage mit `einfuegen: true`
+bleibt offen. Standard: Einfügen erlaubt (`class=""`). In der App: Häkchen «Einfügen in Freitexten sperren».
+
+**Länge und Platzhalter von Textlücken** (27.09.2026, nachgebaut aus `referenz/laenge/`, OpenOLAT 21.0.3,
+Test `tests/test_laenge.py`, Demo `beispiele/laenge.yaml`): `laenge: 150` setzt `expectedLength` («Erwartete
+Länge»), `platzhalter: "Ihre Antwort hier"` den `placeholderText` — für **alle Textlücken** der Frage, bei
+`lueckentext` und `gemischt`. Gedacht für kurze Antworten in einer Lücke, z. B. je Aussage ein Dropdown
+«Tatsache/Bewertung» und darunter «Begründung: {{…}}». Die Variante in der Lücke ist dann die Musterlösung:
+OLAT zeigt sie in den Resultaten, sobald die Testeinstellungen Lösungen freigeben (`formativ`). Eine frei
+formulierte Antwort trifft sie nie — solche Lücken von Hand bewerten. Zahl-Lücken und Dropdowns bleiben unverändert.
 
 **Globale Dropdown-Optionen:** `optionen: [Mars, Venus]` bei dropdown/gemischt — OpenOlats «globale
 Antworten»: die Optionen stehen zusätzlich in jedem Dropdown der Frage (`templateDeclaration`).
@@ -146,6 +171,13 @@ Zeilenumbruch in Lückentext und Hottext wie überall: Zeile mit `\` beenden.
 YouTube-, nanoo.tv- (in OLAT getestet 22.09.2026) und mp3-Links erscheinen nach dem Fragetext im OLAT-Player — dasselbe
 Markup wie «Medien einfügen» im OLAT-Editor (`olatFlashMovieViewer`, auch Audio als
 `type="video"`). Nur verlinkt, nicht ins Paket kopiert.
+**SRF-Audio** (27.09.2026 in OLAT geprüft): `srf.ch/play/embed?urn=…` spielt der Player **nicht** (HTML-Seite). Die mp3
+über die URN holen: `https://il.srgssr.ch/integrationlayer/2.0/mediaComposition/byUrn/<urn>.json` → in `chapterList`
+das Kapitel mit genau dieser URN → `resourceList[].url` mit Protokoll HTTPS und Encoding MP3 (z. B.
+`https://download-media.srf.ch/world/audio/Rendez-vous_radio/2026/09/….mp3`) — das spielt, auch an der Sektion.
+
+**Hinweisfrage** (27.09.2026 geprüft): `sc` mit `punkte: 0` und nur einer Antwort «Ja» baut und erscheint sauber —
+z. B. «Beitrag gehört? Achtung, der nächste Teil hat kein Audio».
 
 **Bilder im Fragetext, bei jedem Typ:** `bilder: [pfad.png, …]` oder `[{datei, alt, breite, hoehe}]`
 (Pfad relativ zur YAML-Datei; PNG, JPEG, GIF). Je Bild ein Absatz `<p><img/></p>` direkt nach `frage`,
@@ -227,10 +259,10 @@ funktioniert.** Abgedeckt:
 
 - mehrere Lücken in einer Frage, Varianten pro Lücke (T1)
 - Zahl mit Toleranz — `toleranceMode="absolute"` ist geraten (T2)
-- gemischte Lücken mit Dropdown und Zahl (T3)
+- gemischte Lücken mit Dropdown und Zahl (T3) — seit 27.09.2026 pro Antwort, so noch nicht neu importiert
 - Punkte ≠ 1, v. a. Kprim-Halbpunkte (T4)
 - Matrix mit ungenutzter Spalte, Hottext und Hotspot mit mehreren richtigen (T5–T7)
 - mehrere Sektionen, Sektion gemischt; `expectedLines`; Zeichnen ohne Bild (T8–T9)
 
-Nicht unterstützt: Feedback-Texte ausser Hinweis und Musterlösung bei Freitext, Punkte pro Antwort bei gemischt/hotspot/reihenfolge,
+Nicht unterstützt: Feedback-Texte ausser Hinweis und Musterlösung bei Freitext, Punkte pro Antwort bei hotspot/reihenfolge,
 Fragenpools. Kommt, wenn ein Export zeigt, wie OpenOlat es schreibt.

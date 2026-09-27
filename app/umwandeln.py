@@ -15,7 +15,8 @@ import yaml
 TYPEN = ["sc", "mc", "kprim", "match", "matchdraganddrop", "matchtruefalse", "fib", "numerical",
          "inlinechoice", "gapmixed", "hottext", "order", "essay", "upload"]
 # Typen mit «Punkte pro Antwort» — gleiche Liste wie olatqti.PRO_ANTWORT
-PRO_ANTWORT = {"mc", "match", "matchdraganddrop", "matchtruefalse", "hottext", "fib", "numerical", "inlinechoice"}
+PRO_ANTWORT = {"mc", "match", "matchdraganddrop", "matchtruefalse", "hottext", "fib", "numerical", "inlinechoice",
+               "gapmixed"}
 
 
 def _nullbar(schema: dict) -> dict:
@@ -44,6 +45,11 @@ FRAGE = {
             "type": "object", "additionalProperties": False, "required": ["zeile", "spalte"],
             "properties": {"zeile": {"type": "string"}, "spalte": {"type": "string"}}}}),
         "text": {"type": ["string", "null"]},
+        # Lückentypen: Punkte je Lückenart, wenn das PDF sie unterschiedlich gewichtet (27.09.2026)
+        "punkte_dropdown": {"type": ["number", "null"]},
+        "punkte_text": {"type": ["number", "null"]},
+        "punkte_zahl": {"type": ["number", "null"]},
+        "laenge": {"type": ["integer", "null"]},  # Breite der Textlücken, wenn ein Satz hineingehört
         "elemente": _nullbar(_LISTE),
         "antwortzeilen": {"type": ["integer", "null"]},
         "medien": _nullbar(_LISTE),
@@ -119,7 +125,8 @@ SEKTIONEN
   («Lesen Sie den Text für die Aufgaben C1 und C2»), und hat der Teil noch weitere Fragen (C3), ist das immer
   dieser Fall — die Anweisung samt Text gehört dann in C1 und C2, nicht in die Einleitung.
   Prüfe vor jeder Einleitung: Braucht wirklich JEDE Frage des Teils diesen Text, auch die letzte? Wenn nein:
-  keine Einleitung.
+  keine Einleitung. Ein solcher Text darf NIE ganz wegfallen — er steht entweder in der Einleitung oder in den
+  Fragen, für die er gilt.
 - Text zwischen Testtitel und erstem Teil, der sagt, wofür er gilt («Schauen Sie das Video zuerst an. Die Fragen
   in Teil A beziehen sich darauf»): in `einleitung` der genannten Sektion(en), nicht weglassen.
 - Hat das PDF keine Teile, aber vor der ersten Frage eine Ausgangslage für alle Fragen: `einleitung` der
@@ -180,6 +187,11 @@ FRAGETYP WÄHLEN — nach der Form im PDF, wenn kein Typ genannt ist
   z. B. «Antwort: {{#20±2}} klx» oder «Fachbegriff: {{Chlorophyll}}». Die Toleranz aus der Lösung ableiten
   («akzeptiert: 18 bis 22» → {{#20±2}}). Bei allen Lückentypen darf `text` nie null sein.
 - hottext: Wörter im Text anklicken → `text` mit [[Wort]], richtige [[*Wort]]
+- Vergibt das PDF bei einer Lückenaufgabe unterschiedliche Punkte je Lückenart («je Wahl 1 P., je Begründung
+  2 P.»): `punkte_dropdown`, `punkte_text`, `punkte_zahl` = Punkte je Lücke dieser Art, `punkte` = die Summe.
+  Sonst alle drei null. Eine Textlücke, in die ein ganzer Satz gehört (lange Linie, «Begründung: ____»):
+  `laenge` = 150, sonst null. In eine solche Lücke kommt die Musterlösung aus dem PDF — OLAT zeigt die erste
+  Variante als korrekte Lösung; bewertet wird sie von Hand.
 
 ANTWORTFORM IM PDF — woran du den Typ erkennst (wenn kein Typ genannt ist)
 Schau, WIE im PDF geantwortet wird, nicht nur, was gefragt ist. Das Verb allein («Nennen Sie») entscheidet nicht.
@@ -203,6 +215,8 @@ Schau, WIE im PDF geantwortet wird, nicht nur, was gefragt ist. Das Verb allein 
 - Begriffe paarweise verbinden (zwei Spalten, Linien ziehen, Buchstabe neben Nummer eintragen «1 → __») → match,
   jede Zeile genau eine Spalte. Begriffe in wenige Gruppen/Kategorien sortieren → matchdraganddrop.
 - Kästchen zum Nummerieren (Schritte 1–5 in die richtige Reihenfolge bringen) → order.
+- Je Aussage eine Wahl (Tatsache/Bewertung, richtig/falsch) UND eine Linie für die Begründung → gapmixed: je
+  Aussage eine Zeile «a) «Aussage» → {{*Tatsache|Bewertung}} \\», darunter «Begründung: {{Musterlösung}}».
 - Im Text unterstreichen, markieren, einkreisen → hottext.
 - Kästchen oder Kreise vor Antwortoptionen zum Ankreuzen → sc/mc (siehe oben); eine Tabelle mit Spalten
   «richtig/falsch» → kprim/matchtruefalse; eine Tabelle mit Kreuzen in mehreren Spalten → match.
@@ -576,11 +590,11 @@ def mit_bewertung(text: str, pro_antwort: bool = True, abzug: bool = True) -> st
     return kopf + text
 
 
-_EINSTELLUNGEN_OBEN = re.compile(r"^(?:konfig|zeitlimit|bestehen)\s*:.*(?:\n|$)", re.M)
+_EINSTELLUNGEN_OBEN = re.compile(r"^(?:konfig|zeitlimit|bestehen|einfuegen)\s*:.*(?:\n|$)", re.M)
 
 
 def mit_einstellungen(text: str, konfig: str = "neutral", zeitlimit: float | None = None,
-                      bestehen: float | None = None) -> str:
+                      bestehen: float | None = None, einfuegen: bool = True) -> str:
     """Testeinstellungen der Lehrperson oben ins YAML (`konfig`, `zeitlimit` in Minuten, `bestehen` in
     Punkten) und ersetzt, was dort schon stand. Ohne Zeitlimit/Grenze fehlen die Zeilen ganz (Standard)."""
     kopf = f"konfig: {konfig}\n"
@@ -588,6 +602,8 @@ def mit_einstellungen(text: str, konfig: str = "neutral", zeitlimit: float | Non
         kopf += f"zeitlimit: {zeitlimit:g}\n"
     if bestehen is not None:
         kopf += f"bestehen: {bestehen:g}\n"
+    if not einfuegen:  # Kopieren/Einfügen in allen Freitexten sperren; eine Frage kann einfuegen: true setzen
+        kopf += "einfuegen: false\n"
     text = _EINSTELLUNGEN_OBEN.sub("", text)
     if (m := re.match(r"\s*---[^\n]*\n", text)):
         return text[:m.end()] + kopf + text[m.end():]
@@ -632,6 +648,21 @@ def mit_aufbau(text: str, eine_sektion: bool = False, neue_teile_ab: list[int] =
         grenzen = [0, *sorted({i for i in neue_teile_ab if 0 < i < len(seks)}), len(seks)]
         satz["teile"] = [{"sektionen": seks[a:b]} for a, b in zip(grenzen, grenzen[1:])]
     return yaml.safe_dump(satz, allow_unicode=True, sort_keys=False, width=110)
+
+
+def punkte_von(f: dict) -> float:
+    """Punkte einer Frage wie olatqti sie rechnet: mit `punkte_dropdown`/`_text`/`_zahl` die Summe je Lücke."""
+    gewichte = {"dropdown": f.get("punkte_dropdown"), "text": f.get("punkte_text"), "zahl": f.get("punkte_zahl")}
+    if any(v is not None for v in gewichte.values()) and f.get("text"):
+        summe = 0.0
+        for t in re.findall(r"\{\{(.+?)\}\}", str(f["text"])):
+            art = "zahl" if t.strip().startswith("#") else "dropdown" if "*" in t else "text"
+            summe += float(gewichte[art] or 0)
+        return summe
+    try:
+        return float(f.get("punkte", 1))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def alle_sektionen(satz: dict) -> list[tuple[str, dict]]:
@@ -753,6 +784,13 @@ def _ohne_rot(o):
     return o
 
 
+def _zeilen_behalten(absatz: str) -> str:
+    """Jede Zeile eines Lückentext-Absatzes endet mit « \\» (Zeilenumbruch in olatqti), ausser der letzten."""
+    zeilen = [z.rstrip() for z in absatz.strip().split("\n") if z.strip()]
+    return "\n".join(z if i == len(zeilen) - 1 or z.endswith("\\") else f"{z} \\"
+                     for i, z in enumerate(zeilen))
+
+
 def _sektion(s: dict, erweitert: bool = False) -> dict:
     """Sektion aus dem Modell: Einleitung, Medien und Bilder der Sektion (27.09.2026), dann die Fragen."""
     sek = {"titel": s["titel"]}
@@ -799,7 +837,7 @@ def _frage(q: dict, erweitert: bool = False) -> dict:
     if typ in PRO_ANTWORT:  # andere Typen haben eigene Regeln, olatqti lehnt die Felder dort ab
         if q.get("bewertung") == "alles":
             f["bewertung"] = "alles"
-        elif q.get("abzug") is not None and typ not in ("fib", "numerical", "inlinechoice"):
+        elif q.get("abzug") is not None and typ not in ("fib", "numerical", "inlinechoice", "gapmixed"):
             f["abzug"] = q["abzug"]
     if q.get("frage"):
         f["frage"] = q["frage"]
@@ -811,7 +849,21 @@ def _frage(q: dict, erweitert: bool = False) -> dict:
         f["zeilen"], f["spalten"] = q["zeilen"] or [], q["spalten"] or []
         f["loesung"] = [[z["zeile"], z["spalte"]] for z in q["zuordnung"] or []]
     elif typ in ("fib", "numerical", "inlinechoice", "gapmixed", "hottext"):
-        f["text"] = q["text"] or ""
+        # Das Modell verbindet umbrochene PDF-Zeilen selbst — ein Zeilenwechsel, der im Lückentext bleibt, ist
+        # gewollt («… {{*Tatsache|Bewertung}}» / «Begründung: {{…}}»), das \ dafür lässt es aber oft weg (27.09.2026)
+        f["text"] = "\n\n".join(_zeilen_behalten(a) for a in re.split(r"\n[ \t]*\n", (q["text"] or "").strip()))
+        if typ != "hottext":
+            vorhanden = {"punkte_dropdown": "{{*" in f["text"] or bool(re.search(r"\{\{[^}]*\|\s*\*", f["text"])),
+                         "punkte_zahl": "{{#" in f["text"],
+                         "punkte_text": any(not t.lstrip().startswith("#") and "*" not in t
+                                            for t in re.findall(r"\{\{(.+?)\}\}", f["text"]))}
+            gewichte = {k: q[k] for k in vorhanden if q.get(k) is not None and vorhanden[k]}
+            if gewichte and all(k in gewichte for k, da in vorhanden.items() if da) and not f.get("bewertung"):
+                # Punkte je Lückenart: olatqti rechnet punkte als Summe nach (und bricht bei Abweichung ab)
+                f.update(gewichte)
+                f.pop("punkte", None)
+            if q.get("laenge") and typ in ("fib", "gapmixed"):
+                f["laenge"] = q["laenge"]
     elif typ == "order":
         f["elemente"] = q["elemente"] or []
     elif typ == "essay":
@@ -850,6 +902,60 @@ def _traeger(satz: dict) -> list[dict]:
     """Alles, was Medien und Bilder tragen kann: Sektionen (Einleitung) und Fragen."""
     teile = satz["teile"] if "teile" in satz else [satz]
     return [x for t in teile or [] for sek in sektionen_von(t) for x in (sek, *(sek.get("fragen") or []))]
+
+
+_WORT = re.compile(r"[A-Za-zÄÖÜäöüßéèàçâêô]{2,}")
+_LOESUNGSZEILE = re.compile(r"\s*(?:Lösung|Musterlösung|Lösungen|Lösungshinweis|Bewertung|Punkte)\b.{0,3}[:.]", re.I)
+_ANTWORTZEILE = re.compile(r"\s*(?:\[[ x]\]|☐|☒|●|\||- \[)|.*(?:\[x\]|\[ \]|☐|☒|●)")
+
+
+def _woerter(s: str) -> list[str]:
+    return [w.lower() for w in _WORT.findall(s)]
+
+
+def _alle_texte(o) -> list[str]:
+    if isinstance(o, str):
+        return [o]
+    if isinstance(o, dict):
+        return [t for v in o.values() for t in _alle_texte(v)]
+    if isinstance(o, list):
+        return [t for v in o for t in _alle_texte(v)]
+    return []
+
+
+def nicht_uebernommen(pdf_text: str, satz: dict, min_woerter: int = 7) -> list[str]:
+    """Sätze aus dem PDF, die im Fragensatz fehlen — das Modell liess am 27.09.2026 einen Lesetext für zwei
+    Fragen in 3 von 6 Läufen ganz weg, ohne Spur. Verglichen werden Wortfolgen (je drei Wörter), damit LaTeX,
+    Formatierung und kleine Anpassungen nicht stören. Nicht geprüft: Lösungen (rot oder «Lösung:»-Absätze),
+    Überschriften, Ankreuz- und Tabellenzeilen, kurze Sätze."""
+    t = re.sub(r"<rot>.*?</rot>", " ", pdf_text, flags=re.S)
+    zeilen, in_loesung, absaetze, lauf = t.split("\n"), False, [], []
+    for z in zeilen:
+        s = z.strip()
+        ende = not s or s.startswith(("--- Seite", "[Bild:")) or re.fullmatch(r"\*\*.+\*\*", s) \
+            or bool(_ANTWORTZEILE.match(s)) or s.count(" · ") >= 2  # Kopfzeile «Fach · 45 Minuten · Total …»
+        if ende or _LOESUNGSZEILE.match(s):
+            if lauf:
+                absaetze.append(" ".join(lauf))
+            lauf = []
+            in_loesung = bool(_LOESUNGSZEILE.match(s)) or (in_loesung and not ende)
+            continue
+        if not in_loesung:
+            lauf.append(s.replace("**", ""))
+    if lauf:
+        absaetze.append(" ".join(lauf))
+    korpus = _woerter(" ".join(_alle_texte(satz)))
+    bekannt = {tuple(korpus[i:i + 3]) for i in range(len(korpus) - 2)}
+    fehlt = []
+    for a in absaetze:
+        for s in re.split(r"(?<=[.!?])\s+(?=[A-ZÄÖÜ«])", re.sub(r"-\s+(?=[a-zäöü])", "", a)):
+            w = _woerter(s)
+            if len(w) < min_woerter or s.count("·") >= 2:  # «·» als Trenner: Kopfzeile mit Fach, Zeit, Total
+                continue
+            gruppen = [tuple(w[i:i + 3]) for i in range(len(w) - 2)]
+            if sum(g in bekannt for g in gruppen) / len(gruppen) < 0.5:
+                fehlt.append(" ".join(s.split()))
+    return fehlt
 
 
 VERWEIS_MEDIUM = re.compile(r"\b(Video|Film|Clip|Audio|Hörbeitrag|Podcast)", re.I)
