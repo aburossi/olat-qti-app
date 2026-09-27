@@ -144,6 +144,23 @@ def main() -> int:
         el = olatqti.medium({"url": "https://x/sd.mp4", "start": "14:17"}, olatqti.Ids("t"))
         if ",640,480,'857',0,'video'," not in el.find(olatqti.q("object")).get("data-oo-movie"):
             fehler.append(f"medium mit start: {el.find(olatqti.q('object')).get('data-oo-movie')}")
+        # SRF-Player eingebettet (in OLAT geprüft 27.09.2026): URN, Play-Link und Einbettungslink ergeben dasselbe
+        bangkok = "urn:srf:video:d0acac4e-ccc9-43ed-9067-3a25863abba4"
+        soll = f"https://www.srf.ch/play/embed?urn={bangkok}&subdivisions=false"
+        for wert in (bangkok, f"https://www.srf.ch/play/tv/-/video/-?urn={bangkok}",
+                     f"https://www.srf.ch/play/embed?urn={bangkok}&subdivisions=false"):
+            o = olatqti.medium({"srf": wert}, olatqti.Ids("t")).find(olatqti.q("object"))
+            if (o.get("data"), o.get("type"), o.get("height")) != (soll, "text/html", "360"):
+                fehler.append(f"srf-Player {wert}: {o.attrib}")
+        o = olatqti.medium({"srf": "urn:rts:audio:123", "start": "1:30"}, olatqti.Ids("t")).find(olatqti.q("object"))
+        if o.get("data") != "https://www.rts.ch/play/embed?urn=urn:rts:audio:123&subdivisions=false&startTime=90":
+            fehler.append(f"srf-Player mit start/RTS: {o.get('data')}")
+        try:
+            olatqti.medium({"srf": "https://www.srf.ch/audio/x?id=AUDI1"}, olatqti.Ids("t"))
+            fehler.append("srf ohne URN: kein Fehler")
+        except olatqti.FehlerImFragensatz as e:
+            if "App" not in str(e):
+                fehler.append(f"srf ohne URN: {e}")
         # Erkennen: Seiten ja, mp3 und fremde Links nein
         for url, soll in ((GREDIG, True), (f"https://www.srf.ch/play/tv/x?urn={URN}", True), (MP3, False),
                           ("https://www.youtube.com/watch?v=q2LBfTE6LI0", False), ("https://www.srf.ch/news/x", False)):

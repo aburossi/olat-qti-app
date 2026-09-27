@@ -252,6 +252,30 @@ def sekunden(wert) -> int:
     return s
 
 
+SRG_PLAYER_HOST = {"srf": "www.srf.ch", "rts": "www.rts.ch", "rsi": "www.rsi.ch", "rtr": "www.rtr.ch",
+                   "swi": "www.swissinfo.ch"}
+
+
+def srg_player(m: dict) -> ET.Element:
+    """SRG-Player eingebettet: `{srf: <URN oder Link mit urn=…>, start, breite, hoehe}` → <object type="text/html">
+    mit der Einbettungsseite (play/embed?urn=…&subdivisions=false). In OLAT geprüft 27.09.2026: erscheint in Frage
+    und Sektionseinleitung; ein Beitrag (eigene URN) spielt genau von Anfang bis Ende — Audio und Video.
+    `start` → startTime (Sekunden); ein Ende kennt der SRG-Player nicht (liest nur urn, startTime, autoPlay,
+    subdivisions). Ein iframe ginge nicht: kein QTI, OLAT verwirft die Frage. Nur verlinkt, nichts kopiert."""
+    from urllib.parse import unquote
+    wert = str(m["srf"]).strip()
+    urn = wert if SRG_URN.fullmatch(wert) else next(iter(SRG_URN.findall(unquote(wert))), None)
+    if not urn:
+        raise FehlerImFragensatz(f"srf: «{wert}» — URN (urn:srf:video:…) oder Link mit urn=… angeben; "
+                                 "Audio-Seiten (srf.ch/audio/…?id=…) löst die App auf, oder: olatqti.py srf-mp3 <Link>")
+    url = f"https://{SRG_PLAYER_HOST[urn.split(':')[1]]}/play/embed?urn={urn}&subdivisions=false"
+    if m.get("start") not in (None, "", 0):
+        url += f"&startTime={sekunden(m['start'])}"
+    b, h = int(m.get("breite", 640)), int(m.get("hoehe", 360))
+    return E("p", None, E("object", {"data": url, "type": "text/html", "width": b, "height": h},
+                          E("a", {"href": url}, text="Beitrag bei SRF öffnen")))
+
+
 def medium(m, ids) -> ET.Element:
     """Video oder Audio per URL, so wie es OpenOlats «Medien einfügen» schreibt.
     Auch mp3 läuft als type="video" — OLAT hat nur den einen Player.
@@ -260,6 +284,8 @@ def medium(m, ids) -> ET.Element:
     («Unsupported format»)."""
     if isinstance(m, str):
         m = {"url": m}
+    if m.get("srf"):
+        return srg_player(m)
     url, b, h = str(m["url"]), int(m.get("breite", 640)), int(m.get("hoehe", 480))
     start = f"'{sekunden(m['start'])}'" if m.get("start") not in (None, "", 0) else "''"
     vid = f"olatFlashMovieViewer{int(ids('', 12), 16) % 900000 + 100000}"
